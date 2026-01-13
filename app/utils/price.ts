@@ -189,14 +189,16 @@ export function formatRangeDisplay(range: MaxRange, basePrice?: string): string 
 /**
  * Formats only the range value (no high, low, or percentage)
  * @param range MaxRange object or null
+ * @param multiplier Optional multiplier to apply to the range (default 1.0)
  * @returns Formatted range value as string, or "—" if no range
  */
-export function formatRangeOnly(range: MaxRange | null | undefined): string {
+export function formatRangeOnly(range: MaxRange | null | undefined, multiplier: number = 1.0): string {
   if (!range || range.range === 0) {
     return '—';
   }
 
-  return formatPrice(range.range.toString());
+  const adjustedRange = range.range * multiplier;
+  return formatPrice(adjustedRange.toString());
 }
 
 /**

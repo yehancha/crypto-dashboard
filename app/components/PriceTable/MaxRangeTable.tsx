@@ -10,6 +10,7 @@ interface MaxRangeTableProps {
 
 export default function MaxRangeTable({ prices }: MaxRangeTableProps) {
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const [multiplier, setMultiplier] = useState<number>(100);
 
   useEffect(() => {
     // Update time every second
@@ -24,16 +25,36 @@ export default function MaxRangeTable({ prices }: MaxRangeTableProps) {
   const minutesRemaining = getMinutesUntilNext15MinInterval();
   const highlightedColumn = getHighlightedColumn(minutesRemaining);
 
+  // Generate multiplier options from 10% to 200% in 10% increments
+  const multiplierOptions = Array.from({ length: 20 }, (_, i) => (i + 1) * 10);
+
   if (prices.length === 0) {
     return null;
   }
 
   return (
     <div className="mt-8 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800">
+      <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
           Max Range Analysis
         </h2>
+        <div className="flex items-center gap-2">
+          <label htmlFor="multiplier-select" className="text-sm text-zinc-600 dark:text-zinc-400">
+            Multiplier:
+          </label>
+          <select
+            id="multiplier-select"
+            value={multiplier}
+            onChange={(e) => setMultiplier(Number(e.target.value))}
+            className="px-3 py-1.5 text-sm rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            {multiplierOptions.map((value) => (
+              <option key={value} value={value}>
+                {value}%
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-full">
@@ -79,7 +100,7 @@ export default function MaxRangeTable({ prices }: MaxRangeTableProps) {
                 className={`px-4 py-4 text-right text-xs text-zinc-600 dark:text-zinc-400 bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-500`}
                 title={`${highlightedColumn} minute max range`}
               >
-                {formatRangeOnly(item.maxRanges?.find(r => r.windowSize === highlightedColumn))}
+                {formatRangeOnly(item.maxRanges?.find(r => r.windowSize === highlightedColumn), multiplier / 100)}
               </td>
               {Array.from({ length: 15 }, (_, i) => 15 - i).map((windowSize) => {
                 const range = item.maxRanges?.find(r => r.windowSize === windowSize);
