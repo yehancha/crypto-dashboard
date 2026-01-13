@@ -14,6 +14,9 @@ export default function PriceTableHeader() {
           Symbol
         </th>
         <th className="px-6 py-4 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          15m Close
+        </th>
+        <th className="px-6 py-4 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
           Price
         </th>
       </tr>

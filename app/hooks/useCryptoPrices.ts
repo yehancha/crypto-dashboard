@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
-import { getPrices, type BinancePrice, BinanceRateLimitError } from '../lib/binance';
+import { getPrices, get15mCandleCloses, type BinancePrice, BinanceRateLimitError } from '../lib/binance';
 
 const POLL_INTERVAL = 5000; // 5 seconds
+const CANDLE_POLL_INTERVAL = 60000; // 1 minute for 15m candle data
 const MAX_BACKOFF_INTERVAL = 60000; // Maximum 60 seconds between retries
 
 export interface UseCryptoPricesOptions {
@@ -31,6 +32,7 @@ export function useCryptoPrices(
   const [isRateLimited, setIsRateLimited] = useState(false);
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const candleIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const backoffTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const currentIntervalRef = useRef<number>(POLL_INTERVAL);
   const symbolsRef = useRef<string[]>(initialSymbols);
@@ -40,6 +42,13 @@ export function useCryptoPrices(
       clearInterval(intervalRef.current);
     }
     intervalRef.current = setInterval(fetchPrices, interval);
+  };
+
+  const setupCandlePolling = () => {
+    if (candleIntervalRef.current) {
+      clearInterval(candleIntervalRef.current);
+    }
+    candleIntervalRef.current = setInterval(fetchCandleCloses, CANDLE_POLL_INTERVAL);
   };
 
   const fetchPrices = async () => {
@@ -58,10 +67,18 @@ export function useCryptoPrices(
       setIsRateLimited(false);
       const data = await getPrices(currentSymbols);
       // Sort by symbol order to maintain consistent display
-      const sortedData = currentSymbols.map(symbol => 
-        data.find(item => item.symbol === symbol) || { symbol, price: '0' }
-      );
-      setPrices(sortedData);
+      // Preserve existing candle data when updating prices
+      setPrices((prevPrices) => {
+        const prevPriceMap = new Map(prevPrices.map(p => [p.symbol, p]));
+        return currentSymbols.map(symbol => {
+          const newPrice = data.find(item => item.symbol === symbol) || { symbol, price: '0' };
+          const prevPrice = prevPriceMap.get(symbol);
+          return {
+            ...newPrice,
+            close15m: prevPrice?.close15m || newPrice.close15m,
+          };
+        });
+      });
       setLoading(false);
       
       // Reset to normal interval on success
@@ -104,6 +121,31 @@ export function useCryptoPrices(
     }
   };
 
+  const fetchCandleCloses = async () => {
+    const currentSymbols = symbolsRef.current;
+    
+    // Don't fetch if no symbols
+    if (currentSymbols.length === 0) {
+      return;
+    }
+
+    try {
+      const candleCloses = await get15mCandleCloses(currentSymbols);
+      
+      // Update prices with candle close data
+      setPrices((prevPrices) =>
+        prevPrices.map((price) => ({
+          ...price,
+          close15m: candleCloses[price.symbol] || price.close15m,
+        }))
+      );
+    } catch (err) {
+      // Log error but don't update error state for candle data
+      // to avoid interfering with main price fetching
+      console.error('Error fetching 15m candle closes:', err);
+    }
+  };
+
   const addSymbol = (symbol: string) => {
     const trimmedSymbol = symbol.trim().toUpperCase();
     if (trimmedSymbol && !symbols.includes(trimmedSymbol)) {
@@ -139,14 +181,19 @@ export function useCryptoPrices(
   useEffect(() => {
     // Initial fetch
     fetchPrices();
+    fetchCandleCloses();
 
     // Set up polling with initial interval
     setupPolling(POLL_INTERVAL);
+    setupCandlePolling();
 
     // Cleanup on unmount
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+      }
+      if (candleIntervalRef.current) {
+        clearInterval(candleIntervalRef.current);
       }
       if (backoffTimeoutRef.current) {
         clearTimeout(backoffTimeoutRef.current);

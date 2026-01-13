@@ -80,6 +80,9 @@ export default function PriceTableRow({
         {item.symbol}
       </td>
       <td className="px-6 py-4 text-right text-sm text-zinc-600 dark:text-zinc-400">
+        {item.close15m ? formatPrice(item.close15m) : '—'}
+      </td>
+      <td className="px-6 py-4 text-right text-sm text-zinc-600 dark:text-zinc-400">
         {formatPrice(item.price)}
       </td>
     </tr>
