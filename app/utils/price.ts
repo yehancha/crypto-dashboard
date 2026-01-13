@@ -185,3 +185,32 @@ export function formatRangeDisplay(range: MaxRange, basePrice?: string): string 
 
   return result;
 }
+
+/**
+ * Calculates the minutes remaining until the next 15-minute interval
+ * @returns Number of minutes until the next 15-minute interval (0, 15, 30, 45)
+ */
+export function getMinutesUntilNext15MinInterval(): number {
+  const now = new Date();
+  const currentMinute = now.getMinutes();
+  const nextIntervalMinute = Math.ceil(currentMinute / 15) * 15;
+  const nextInterval = new Date(now);
+  nextInterval.setMinutes(nextIntervalMinute, 0, 0);
+  
+  // If we've already passed the calculated interval (shouldn't happen, but handle edge case)
+  if (nextInterval <= now) {
+    nextInterval.setHours(nextInterval.getHours() + 1);
+    nextInterval.setMinutes(0);
+  }
+  
+  return (nextInterval.getTime() - now.getTime()) / (1000 * 60);
+}
+
+/**
+ * Determines which column to highlight based on minutes remaining until next 15-minute interval
+ * @param minutesRemaining Number of minutes remaining
+ * @returns Window size (1-15) to highlight
+ */
+export function getHighlightedColumn(minutesRemaining: number): number {
+  return Math.min(15, Math.max(1, Math.ceil(minutesRemaining)));
+}

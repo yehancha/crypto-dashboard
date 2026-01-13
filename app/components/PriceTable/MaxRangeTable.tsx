@@ -1,13 +1,29 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { type BinancePrice } from '../../lib/binance';
-import { formatRangeDisplay } from '../../utils/price';
+import { formatRangeDisplay, getMinutesUntilNext15MinInterval, getHighlightedColumn } from '../../utils/price';
 
 interface MaxRangeTableProps {
   prices: BinancePrice[];
 }
 
 export default function MaxRangeTable({ prices }: MaxRangeTableProps) {
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+
+  useEffect(() => {
+    // Update time every second
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Calculate highlighted column
+  const minutesRemaining = getMinutesUntilNext15MinInterval();
+  const highlightedColumn = getHighlightedColumn(minutesRemaining);
+
   if (prices.length === 0) {
     return null;
   }
@@ -26,15 +42,22 @@ export default function MaxRangeTable({ prices }: MaxRangeTableProps) {
             <th className="px-6 py-4 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-50">
               Symbol
             </th>
-            {Array.from({ length: 15 }, (_, i) => 15 - i).map((windowSize) => (
-              <th
-                key={windowSize}
-                className="px-4 py-4 text-right text-xs font-semibold text-zinc-900 dark:text-zinc-50"
-                title={`${windowSize} minute max range`}
-              >
-                {windowSize}m
-              </th>
-            ))}
+            {Array.from({ length: 15 }, (_, i) => 15 - i).map((windowSize) => {
+              const isHighlighted = windowSize === highlightedColumn;
+              return (
+                <th
+                  key={windowSize}
+                  className={`px-4 py-4 text-right text-xs font-semibold text-zinc-900 dark:text-zinc-50 ${
+                    isHighlighted
+                      ? 'bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-500'
+                      : ''
+                  }`}
+                  title={`${windowSize} minute max range`}
+                >
+                  {windowSize}m
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -48,10 +71,15 @@ export default function MaxRangeTable({ prices }: MaxRangeTableProps) {
               </td>
               {Array.from({ length: 15 }, (_, i) => 15 - i).map((windowSize) => {
                 const range = item.maxRanges?.find(r => r.windowSize === windowSize);
+                const isHighlighted = windowSize === highlightedColumn;
                 return (
                   <td
                     key={windowSize}
-                    className="px-4 py-4 text-right text-xs text-zinc-600 dark:text-zinc-400"
+                    className={`px-4 py-4 text-right text-xs text-zinc-600 dark:text-zinc-400 ${
+                      isHighlighted
+                        ? 'bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-500'
+                        : ''
+                    }`}
                     title={range ? `${windowSize} minute max range` : 'Insufficient data'}
                   >
                     {range ? formatRangeDisplay(range, item.price) : '—'}
