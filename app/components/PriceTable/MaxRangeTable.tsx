@@ -110,7 +110,7 @@ export default function MaxRangeTable({ prices }: MaxRangeTableProps) {
                   return (
                     <div className="flex flex-col">
                       <span>R: {rangeFormatted}</span>
-                      <span>WMA: {wmaFormatted}</span>
+                      <span className="font-bold">WMA: {wmaFormatted}</span>
                     </div>
                   );
                 })()}
