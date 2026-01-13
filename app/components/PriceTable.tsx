@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { getPrices, type BinancePrice } from '../lib/binance';
+import { useEffect, useState, useRef } from 'react';
+import { getPrices, type BinancePrice, BinanceRateLimitError } from '../lib/binance';
 
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT'];
 const POLL_INTERVAL = 5000; // 5 seconds
+const MAX_BACKOFF_INTERVAL = 60000; // Maximum 60 seconds between retries
 
 /**
  * Formats a price string to appropriate decimal places
@@ -26,10 +27,22 @@ export default function PriceTable() {
   const [prices, setPrices] = useState<BinancePrice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isRateLimited, setIsRateLimited] = useState(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const backoffTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const currentIntervalRef = useRef<number>(POLL_INTERVAL);
+
+  const setupPolling = (interval: number) => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+    intervalRef.current = setInterval(fetchPrices, interval);
+  };
 
   const fetchPrices = async () => {
     try {
       setError(null);
+      setIsRateLimited(false);
       const data = await getPrices(SYMBOLS);
       // Sort by symbol order to maintain consistent display
       const sortedData = SYMBOLS.map(symbol => 
@@ -37,8 +50,43 @@ export default function PriceTable() {
       );
       setPrices(sortedData);
       setLoading(false);
+      
+      // Reset to normal interval on success
+      if (currentIntervalRef.current !== POLL_INTERVAL) {
+        currentIntervalRef.current = POLL_INTERVAL;
+        setupPolling(POLL_INTERVAL);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch prices');
+      if (err instanceof BinanceRateLimitError) {
+        setIsRateLimited(true);
+        const retryAfterMs = err.retryAfter 
+          ? Math.min(err.retryAfter * 1000, MAX_BACKOFF_INTERVAL)
+          : Math.min(currentIntervalRef.current * 2, MAX_BACKOFF_INTERVAL);
+        
+        // Update interval with backoff
+        currentIntervalRef.current = retryAfterMs;
+        
+        setError(`${err.message}${err.retryAfter ? ` Retry after ${err.retryAfter}s` : ''}`);
+        
+        // Stop current polling
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+        
+        // Clear any existing backoff timeout
+        if (backoffTimeoutRef.current) {
+          clearTimeout(backoffTimeoutRef.current);
+        }
+        
+        // Wait for the backoff period before retrying and resuming polling
+        backoffTimeoutRef.current = setTimeout(() => {
+          fetchPrices();
+          setupPolling(currentIntervalRef.current);
+        }, retryAfterMs);
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to fetch prices');
+      }
       setLoading(false);
     }
   };
@@ -47,11 +95,19 @@ export default function PriceTable() {
     // Initial fetch
     fetchPrices();
 
-    // Set up polling
-    const interval = setInterval(fetchPrices, POLL_INTERVAL);
+    // Set up polling with initial interval
+    setupPolling(POLL_INTERVAL);
 
     // Cleanup on unmount
-    return () => clearInterval(interval);
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      if (backoffTimeoutRef.current) {
+        clearTimeout(backoffTimeoutRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (loading && prices.length === 0) {
@@ -108,8 +164,14 @@ export default function PriceTable() {
           </table>
         </div>
         {error && (
-          <div className="mt-4 text-sm text-red-600 dark:text-red-400">
-            Warning: {error} (showing last known prices)
+          <div className={`mt-4 text-sm ${
+            isRateLimited 
+              ? 'text-amber-600 dark:text-amber-400' 
+              : 'text-red-600 dark:text-red-400'
+          }`}>
+            {isRateLimited ? '⚠️ ' : ''}
+            {error}
+            {prices.length > 0 && ' (showing last known prices)'}
           </div>
         )}
       </div>
