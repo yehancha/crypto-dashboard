@@ -187,6 +187,19 @@ export function formatRangeDisplay(range: MaxRange, basePrice?: string): string 
 }
 
 /**
+ * Formats only the range value (no high, low, or percentage)
+ * @param range MaxRange object or null
+ * @returns Formatted range value as string, or "—" if no range
+ */
+export function formatRangeOnly(range: MaxRange | null | undefined): string {
+  if (!range || range.range === 0) {
+    return '—';
+  }
+
+  return formatPrice(range.range.toString());
+}
+
+/**
  * Calculates the minutes remaining until the next 15-minute interval
  * @returns Number of minutes until the next 15-minute interval (0, 15, 30, 45)
  */

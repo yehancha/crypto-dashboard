@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { type BinancePrice } from '../../lib/binance';
-import { formatRangeDisplay, getMinutesUntilNext15MinInterval, getHighlightedColumn } from '../../utils/price';
+import { formatRangeDisplay, formatRangeOnly, getMinutesUntilNext15MinInterval, getHighlightedColumn } from '../../utils/price';
 
 interface MaxRangeTableProps {
   prices: BinancePrice[];
@@ -42,6 +42,12 @@ export default function MaxRangeTable({ prices }: MaxRangeTableProps) {
             <th className="px-6 py-4 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-50">
               Symbol
             </th>
+            <th
+              className={`px-4 py-4 text-right text-xs font-semibold text-zinc-900 dark:text-zinc-50 bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-500`}
+              title={`${highlightedColumn} minute max range`}
+            >
+              {highlightedColumn}m
+            </th>
             {Array.from({ length: 15 }, (_, i) => 15 - i).map((windowSize) => {
               const isHighlighted = windowSize === highlightedColumn;
               return (
@@ -68,6 +74,12 @@ export default function MaxRangeTable({ prices }: MaxRangeTableProps) {
             >
               <td className="px-6 py-4 text-sm font-medium text-zinc-900 dark:text-zinc-50">
                 {item.symbol}
+              </td>
+              <td
+                className={`px-4 py-4 text-right text-xs text-zinc-600 dark:text-zinc-400 bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-500`}
+                title={`${highlightedColumn} minute max range`}
+              >
+                {formatRangeOnly(item.maxRanges?.find(r => r.windowSize === highlightedColumn))}
               </td>
               {Array.from({ length: 15 }, (_, i) => 15 - i).map((windowSize) => {
                 const range = item.maxRanges?.find(r => r.windowSize === windowSize);
