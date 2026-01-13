@@ -1,7 +1,25 @@
+export interface Candle {
+  openTime: number;
+  open: string;
+  high: string;
+  low: string;
+  close: string;
+  volume: string;
+}
+
+export interface MaxRange {
+  windowSize: number;
+  range: number;
+  high: string;
+  low: string;
+}
+
 export interface BinancePrice {
   symbol: string;
   price: string;
   close15m?: string; // 15-minute candle close price
+  candles1m?: Candle[]; // 1-minute candles (up to 60)
+  maxRanges?: MaxRange[]; // Max ranges for windows 15, 14, ..., 1
 }
 
 export class BinanceRateLimitError extends Error {
@@ -142,6 +160,99 @@ export async function get15mCandleCloses(symbols: string[]): Promise<Record<stri
   settled.forEach((result) => {
     if (result.status === 'fulfilled' && result.value.closePrice) {
       results[result.value.symbol] = result.value.closePrice;
+    }
+  });
+  
+  return results;
+}
+
+/**
+ * Fetches 1-minute candle data for a symbol from Binance API
+ * @param symbol Trading pair symbol (e.g., 'BTCUSDT')
+ * @param limit Number of candles to fetch (default: 60 for 1 hour)
+ * @returns Promise with array of candle objects
+ * @throws BinanceRateLimitError if rate limited (429) or IP banned (418)
+ * 
+ * Weight: 1 per request
+ */
+export async function get1mCandles(symbol: string, limit: number = 60): Promise<Candle[]> {
+  try {
+    const url = `${BINANCE_API_BASE}/api/v3/klines?symbol=${symbol}&interval=1m&limit=${limit}`;
+    
+    const response = await fetch(url, {
+      next: { revalidate: 0 }, // Always fetch fresh data
+    });
+
+    // Handle rate limiting (429) and IP ban (418) with Retry-After header
+    if (response.status === 429 || response.status === 418) {
+      const retryAfterHeader = response.headers.get('Retry-After');
+      const retryAfter = retryAfterHeader ? parseInt(retryAfterHeader, 10) : undefined;
+      
+      const errorMessage = response.status === 418
+        ? 'IP banned by Binance. Please wait before retrying.'
+        : 'Rate limit exceeded. Please slow down requests.';
+      
+      throw new BinanceRateLimitError(errorMessage, response.status, retryAfter);
+    }
+
+    if (!response.ok) {
+      throw new Error(`Binance API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data: any[][] = await response.json();
+    
+    // Kline response format: [Open time, Open, High, Low, Close, Volume, ...]
+    return data.map((kline) => ({
+      openTime: kline[0] as number,
+      open: kline[1] as string,
+      high: kline[2] as string,
+      low: kline[3] as string,
+      close: kline[4] as string,
+      volume: kline[5] as string,
+    }));
+  } catch (error) {
+    // Re-throw rate limit errors as-is
+    if (error instanceof BinanceRateLimitError) {
+      throw error;
+    }
+    
+    console.error(`Error fetching 1m candles for ${symbol}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches 1-minute candle data for multiple symbols
+ * @param symbols Array of trading pair symbols (e.g., ['BTCUSDT', 'ETHUSDT'])
+ * @param limit Number of candles to fetch per symbol (default: 60)
+ * @returns Promise with map of symbol to candle array
+ * @throws BinanceRateLimitError if rate limited (429) or IP banned (418)
+ * 
+ * Weight: 1 per symbol per request
+ */
+export async function get1mCandlesBatch(
+  symbols: string[],
+  limit: number = 60
+): Promise<Record<string, Candle[]>> {
+  const results: Record<string, Candle[]> = {};
+  
+  // Fetch all candles in parallel
+  const promises = symbols.map(async (symbol) => {
+    try {
+      const candles = await get1mCandles(symbol, limit);
+      return { symbol, candles };
+    } catch (error) {
+      // Log error but don't fail entire batch
+      console.error(`Failed to fetch 1m candles for ${symbol}:`, error);
+      return { symbol, candles: undefined };
+    }
+  });
+  
+  const settled = await Promise.allSettled(promises);
+  
+  settled.forEach((result) => {
+    if (result.status === 'fulfilled' && result.value.candles) {
+      results[result.value.symbol] = result.value.candles;
     }
   });
   

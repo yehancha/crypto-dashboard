@@ -1,8 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
-import { getPrices, get15mCandleCloses, type BinancePrice, BinanceRateLimitError } from '../lib/binance';
+import { getPrices, get15mCandleCloses, get1mCandlesBatch, type BinancePrice, type Candle, BinanceRateLimitError } from '../lib/binance';
+import { calculateMaxRanges } from '../utils/price';
 
 const POLL_INTERVAL = 5000; // 5 seconds
 const CANDLE_POLL_INTERVAL = 60000; // 1 minute for 15m candle data
+const CANDLE_1M_POLL_INTERVAL = 60000; // 1 minute for 1m candle data
 const MAX_BACKOFF_INTERVAL = 60000; // Maximum 60 seconds between retries
 
 export interface UseCryptoPricesOptions {
@@ -33,9 +35,11 @@ export function useCryptoPrices(
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const candleIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const candle1mIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const backoffTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const currentIntervalRef = useRef<number>(POLL_INTERVAL);
   const symbolsRef = useRef<string[]>(initialSymbols);
+  const candles1mRef = useRef<Map<string, Candle[]>>(new Map());
 
   const setupPolling = (interval: number) => {
     if (intervalRef.current) {
@@ -49,6 +53,13 @@ export function useCryptoPrices(
       clearInterval(candleIntervalRef.current);
     }
     candleIntervalRef.current = setInterval(fetchCandleCloses, CANDLE_POLL_INTERVAL);
+  };
+
+  const setup1mCandlePolling = () => {
+    if (candle1mIntervalRef.current) {
+      clearInterval(candle1mIntervalRef.current);
+    }
+    candle1mIntervalRef.current = setInterval(fetch1mCandles, CANDLE_1M_POLL_INTERVAL);
   };
 
   const fetchPrices = async () => {
@@ -73,9 +84,13 @@ export function useCryptoPrices(
         return currentSymbols.map(symbol => {
           const newPrice = data.find(item => item.symbol === symbol) || { symbol, price: '0' };
           const prevPrice = prevPriceMap.get(symbol);
+          const candles = candles1mRef.current.get(symbol);
+          const maxRanges = candles ? calculateMaxRanges(candles) : undefined;
           return {
             ...newPrice,
             close15m: prevPrice?.close15m || newPrice.close15m,
+            candles1m: prevPrice?.candles1m || candles,
+            maxRanges: prevPrice?.maxRanges || maxRanges,
           };
         });
       });
@@ -134,15 +149,58 @@ export function useCryptoPrices(
       
       // Update prices with candle close data
       setPrices((prevPrices) =>
-        prevPrices.map((price) => ({
-          ...price,
-          close15m: candleCloses[price.symbol] || price.close15m,
-        }))
+        prevPrices.map((price) => {
+          const prevCandles = candles1mRef.current.get(price.symbol);
+          const prevRanges = prevCandles ? calculateMaxRanges(prevCandles) : undefined;
+          return {
+            ...price,
+            close15m: candleCloses[price.symbol] || price.close15m,
+            candles1m: prevCandles,
+            maxRanges: prevRanges,
+          };
+        })
       );
     } catch (err) {
       // Log error but don't update error state for candle data
       // to avoid interfering with main price fetching
       console.error('Error fetching 15m candle closes:', err);
+    }
+  };
+
+  const fetch1mCandles = async () => {
+    const currentSymbols = symbolsRef.current;
+    
+    // Don't fetch if no symbols
+    if (currentSymbols.length === 0) {
+      return;
+    }
+
+    try {
+      const candlesData = await get1mCandlesBatch(currentSymbols, 60);
+      
+      // Update candles ref
+      Object.entries(candlesData).forEach(([symbol, candles]) => {
+        if (candles && candles.length > 0) {
+          candles1mRef.current.set(symbol, candles);
+        }
+      });
+
+      // Calculate max ranges for each symbol and update prices
+      setPrices((prevPrices) =>
+        prevPrices.map((price) => {
+          const candles = candles1mRef.current.get(price.symbol);
+          const maxRanges = candles ? calculateMaxRanges(candles) : undefined;
+          return {
+            ...price,
+            candles1m: candles,
+            maxRanges,
+          };
+        })
+      );
+    } catch (err) {
+      // Log error but don't update error state for candle data
+      // to avoid interfering with main price fetching
+      console.error('Error fetching 1m candles:', err);
     }
   };
 
@@ -159,6 +217,8 @@ export function useCryptoPrices(
     const newSymbols = symbols.filter(s => s !== symbolToRemove);
     setSymbols(newSymbols);
     symbolsRef.current = newSymbols;
+    // Clean up candles for removed symbol
+    candles1mRef.current.delete(symbolToRemove);
   };
 
   const reorderSymbols = (fromIndex: number, toIndex: number) => {
@@ -182,10 +242,12 @@ export function useCryptoPrices(
     // Initial fetch
     fetchPrices();
     fetchCandleCloses();
+    fetch1mCandles();
 
     // Set up polling with initial interval
     setupPolling(POLL_INTERVAL);
     setupCandlePolling();
+    setup1mCandlePolling();
 
     // Cleanup on unmount
     return () => {
@@ -194,6 +256,9 @@ export function useCryptoPrices(
       }
       if (candleIntervalRef.current) {
         clearInterval(candleIntervalRef.current);
+      }
+      if (candle1mIntervalRef.current) {
+        clearInterval(candle1mIntervalRef.current);
       }
       if (backoffTimeoutRef.current) {
         clearTimeout(backoffTimeoutRef.current);

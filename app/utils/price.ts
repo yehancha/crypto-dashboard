@@ -78,3 +78,110 @@ export function formatDeviationWithAbsolute(
   
   return `${absSign}${absFormatted} (${pctFormatted})`;
 }
+
+import type { Candle, MaxRange } from '../lib/binance';
+
+/**
+ * Calculates the maximum range for a specific window size
+ * @param candles Array of candle data
+ * @param windowSize Number of consecutive candles to analyze
+ * @returns MaxRange object with the maximum range found, or null if insufficient candles
+ */
+export function calculateMaxRangeForWindow(
+  candles: Candle[],
+  windowSize: number
+): MaxRange | null {
+  if (candles.length < windowSize) {
+    return null;
+  }
+
+  let maxRange = 0;
+  let maxHigh = '';
+  let maxLow = '';
+
+  // Slide window through candle array
+  for (let i = 0; i <= candles.length - windowSize; i++) {
+    const window = candles.slice(i, i + windowSize);
+    
+    // Find max high and min low in this window
+    const highs = window.map(c => parseFloat(c.high));
+    const lows = window.map(c => parseFloat(c.low));
+    
+    const windowHigh = Math.max(...highs);
+    const windowLow = Math.min(...lows);
+    const range = windowHigh - windowLow;
+
+    // Track the window with maximum range
+    if (range > maxRange) {
+      maxRange = range;
+      // Find the actual high and low strings from the candles
+      const highCandle = window.find(c => parseFloat(c.high) === windowHigh);
+      const lowCandle = window.find(c => parseFloat(c.low) === windowLow);
+      maxHigh = highCandle?.high || windowHigh.toString();
+      maxLow = lowCandle?.low || windowLow.toString();
+    }
+  }
+
+  return {
+    windowSize,
+    range: maxRange,
+    high: maxHigh,
+    low: maxLow,
+  };
+}
+
+/**
+ * Calculates maximum ranges for all window sizes from 15 down to 1
+ * @param candles Array of candle data (should have at least 15 candles for full analysis)
+ * @returns Array of MaxRange objects, one for each window size (15, 14, ..., 1)
+ */
+export function calculateMaxRanges(candles: Candle[]): MaxRange[] {
+  const ranges: MaxRange[] = [];
+  
+  // Calculate for window sizes from 15 down to 1
+  for (let windowSize = 15; windowSize >= 1; windowSize--) {
+    const range = calculateMaxRangeForWindow(candles, windowSize);
+    if (range) {
+      ranges.push(range);
+    } else {
+      // If insufficient candles, still add a placeholder with null values
+      ranges.push({
+        windowSize,
+        range: 0,
+        high: '',
+        low: '',
+      });
+    }
+  }
+  
+  return ranges;
+}
+
+/**
+ * Formats a range display showing high, low, and range
+ * @param range MaxRange object to format
+ * @param basePrice Optional base price for percentage calculation
+ * @returns Formatted string like "H: 50000.00, L: 49000.00 (1000.00)"
+ */
+export function formatRangeDisplay(range: MaxRange, basePrice?: string): string {
+  if (!range.high || !range.low || range.range === 0) {
+    return '—';
+  }
+
+  const highFormatted = formatPrice(range.high);
+  const lowFormatted = formatPrice(range.low);
+  const rangeFormatted = formatPrice(range.range.toString());
+
+  let result = `H: ${highFormatted}, L: ${lowFormatted} (${rangeFormatted})`;
+
+  // Add percentage if base price is provided
+  if (basePrice) {
+    const base = parseFloat(basePrice);
+    if (!isNaN(base) && base !== 0) {
+      const percentage = (range.range / base) * 100;
+      result += ` (${percentage >= 0 ? '+' : ''}${percentage.toFixed(2)}%)`;
+    }
+  }
+
+  return result;
+}

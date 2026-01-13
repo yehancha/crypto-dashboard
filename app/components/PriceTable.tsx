@@ -5,6 +5,7 @@ import { useCryptoPrices } from '../hooks/useCryptoPrices';
 import SymbolInput from './PriceTable/SymbolInput';
 import PriceTableHeader from './PriceTable/PriceTableHeader';
 import PriceTableRow from './PriceTable/PriceTableRow';
+import MaxRangeTable from './PriceTable/MaxRangeTable';
 import EmptyState from './PriceTable/EmptyState';
 import ErrorDisplay from './PriceTable/ErrorDisplay';
 import LoadingState from './PriceTable/LoadingState';
@@ -78,8 +79,8 @@ export default function PriceTable() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black p-8">
-      <div className="w-full max-w-2xl">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black p-8">
+      <div className="w-full max-w-full">
         <h1 className="mb-8 text-3xl font-semibold text-black dark:text-zinc-50">
           Crypto Prices
         </h1>
@@ -117,6 +118,8 @@ export default function PriceTable() {
             </tbody>
           </table>
         </div>
+
+        <MaxRangeTable prices={prices} />
 
         {error && (
           <ErrorDisplay
