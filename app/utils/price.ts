@@ -98,6 +98,8 @@ export function calculateMaxRangeForWindow(
   let maxRange = 0;
   let maxHigh = '';
   let maxLow = '';
+  let weightedSum = 0;
+  let weightSum = 0;
 
   // Slide window through candle array
   for (let i = 0; i <= candles.length - windowSize; i++) {
@@ -120,13 +122,22 @@ export function calculateMaxRangeForWindow(
       maxHigh = highCandle?.high || windowHigh.toString();
       maxLow = lowCandle?.low || windowLow.toString();
     }
+
+    // Calculate WMA: weight = i + 1 (oldest = 1, next = 2, etc.)
+    const weight = i + 1;
+    weightedSum += range * weight;
+    weightSum += weight;
   }
+
+  // Calculate WMA
+  const wma = weightSum > 0 ? weightedSum / weightSum : 0;
 
   return {
     windowSize,
     range: maxRange,
     high: maxHigh,
     low: maxLow,
+    wma,
   };
 }
 
@@ -150,6 +161,7 @@ export function calculateMaxRanges(candles: Candle[]): MaxRange[] {
         range: 0,
         high: '',
         low: '',
+        wma: 0,
       });
     }
   }
@@ -158,10 +170,10 @@ export function calculateMaxRanges(candles: Candle[]): MaxRange[] {
 }
 
 /**
- * Formats a range display showing high, low, and range
+ * Formats a range display showing high, low, range, and WMA
  * @param range MaxRange object to format
  * @param basePrice Optional base price for percentage calculation
- * @returns Formatted string like "H: 50000.00, L: 49000.00 (1000.00)"
+ * @returns Formatted string like "H: 50000.00, L: 49000.00 (R: 1000.00, WMA: 950.00)"
  */
 export function formatRangeDisplay(range: MaxRange, basePrice?: string): string {
   if (!range.high || !range.low || range.range === 0) {
@@ -171,8 +183,9 @@ export function formatRangeDisplay(range: MaxRange, basePrice?: string): string 
   const highFormatted = formatPrice(range.high);
   const lowFormatted = formatPrice(range.low);
   const rangeFormatted = formatPrice(range.range.toString());
+  const wmaFormatted = formatWMA(range.wma);
 
-  let result = `H: ${highFormatted}, L: ${lowFormatted} (${rangeFormatted})`;
+  let result = `H: ${highFormatted}, L: ${lowFormatted} (R: ${rangeFormatted}, WMA: ${wmaFormatted})`;
 
   // Add percentage if base price is provided
   if (basePrice) {
@@ -199,6 +212,21 @@ export function formatRangeOnly(range: MaxRange | null | undefined, multiplier: 
 
   const adjustedRange = range.range * multiplier;
   return formatPrice(adjustedRange.toString());
+}
+
+/**
+ * Formats WMA (Weighted Moving Average) value
+ * @param wma WMA value or null/undefined
+ * @param multiplier Optional multiplier to apply to the WMA (default 1.0)
+ * @returns Formatted WMA value as string, or "—" if no WMA
+ */
+export function formatWMA(wma: number | null | undefined, multiplier: number = 1.0): string {
+  if (wma === null || wma === undefined || wma === 0) {
+    return '—';
+  }
+
+  const adjustedWMA = wma * multiplier;
+  return formatPrice(adjustedWMA.toString());
 }
 
 /**

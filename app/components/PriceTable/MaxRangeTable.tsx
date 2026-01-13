@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { type BinancePrice } from '../../lib/binance';
-import { formatRangeDisplay, formatRangeOnly, getMinutesUntilNext15MinInterval, getHighlightedColumn } from '../../utils/price';
+import { formatRangeDisplay, formatRangeOnly, formatWMA, getMinutesUntilNext15MinInterval, getHighlightedColumn } from '../../utils/price';
 
 interface MaxRangeTableProps {
   prices: BinancePrice[];
@@ -100,7 +100,20 @@ export default function MaxRangeTable({ prices }: MaxRangeTableProps) {
                 className={`px-4 py-4 text-right text-xs text-zinc-600 dark:text-zinc-400 bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-500`}
                 title={`${highlightedColumn} minute max range`}
               >
-                {formatRangeOnly(item.maxRanges?.find(r => r.windowSize === highlightedColumn), multiplier / 100)}
+                {(() => {
+                  const range = item.maxRanges?.find(r => r.windowSize === highlightedColumn);
+                  if (!range || range.range === 0) {
+                    return '—';
+                  }
+                  const rangeFormatted = formatRangeOnly(range, multiplier / 100);
+                  const wmaFormatted = formatWMA(range.wma, multiplier / 100);
+                  return (
+                    <div className="flex flex-col">
+                      <span>R: {rangeFormatted}</span>
+                      <span>WMA: {wmaFormatted}</span>
+                    </div>
+                  );
+                })()}
               </td>
               {Array.from({ length: 15 }, (_, i) => 15 - i).map((windowSize) => {
                 const range = item.maxRanges?.find(r => r.windowSize === windowSize);

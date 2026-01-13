@@ -12,6 +12,7 @@ export interface MaxRange {
   range: number;
   high: string;
   low: string;
+  wma?: number; // Weighted Moving Average
 }
 
 export interface BinancePrice {
