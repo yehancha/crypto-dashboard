@@ -1,7 +1,7 @@
 'use client';
 
 import { type BinancePrice } from '../../lib/binance';
-import { formatPrice } from '../../utils/price';
+import { formatPrice, calculateAbsoluteDeviation, calculateDeviation, formatDeviationWithAbsolute } from '../../utils/price';
 
 interface PriceTableRowProps {
   item: BinancePrice;
@@ -84,6 +84,29 @@ export default function PriceTableRow({
       </td>
       <td className="px-6 py-4 text-right text-sm text-zinc-600 dark:text-zinc-400">
         {formatPrice(item.price)}
+      </td>
+      <td className="px-6 py-4 text-right text-sm font-medium">
+        {(() => {
+          const absoluteDeviation = calculateAbsoluteDeviation(item.price, item.close15m);
+          const percentageDeviation = calculateDeviation(item.price, item.close15m);
+          const deviationText = formatDeviationWithAbsolute(absoluteDeviation, percentageDeviation);
+          const isPositive = absoluteDeviation !== null && absoluteDeviation > 0;
+          const isNegative = absoluteDeviation !== null && absoluteDeviation < 0;
+          
+          return (
+            <span
+              className={
+                isPositive
+                  ? 'text-green-600 dark:text-green-400'
+                  : isNegative
+                  ? 'text-red-600 dark:text-red-400'
+                  : 'text-zinc-600 dark:text-zinc-400'
+              }
+            >
+              {deviationText}
+            </span>
+          );
+        })()}
       </td>
     </tr>
   );
