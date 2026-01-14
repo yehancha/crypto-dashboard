@@ -16,6 +16,8 @@ interface MaxRangeTableProps {
   onDisplayTypeChange: (value: DisplayType) => void;
   onMultiplierChange: (value: number) => void;
   highlightingFlags?: Record<string, boolean>;
+  showMore: boolean;
+  onShowMoreChange: (value: boolean) => void;
 }
 
 export default function MaxRangeTable({ 
@@ -26,9 +28,10 @@ export default function MaxRangeTable({
   onDisplayTypeChange,
   onMultiplierChange,
   highlightingFlags = {},
+  showMore,
+  onShowMoreChange,
 }: MaxRangeTableProps) {
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
-  const [showMore, setShowMore] = useState<boolean>(false);
   
   const timeframeConfig = getTimeframeConfig(timeframe);
 
@@ -60,7 +63,7 @@ export default function MaxRangeTable({
         </h2>
         <div className="flex items-center gap-4">
           <button
-            onClick={() => setShowMore(!showMore)}
+            onClick={() => onShowMoreChange(!showMore)}
             className="px-3 py-1.5 text-sm rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 hover:bg-zinc-50 dark:hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
           >
             {showMore ? 'Show Less' : 'Show More'}

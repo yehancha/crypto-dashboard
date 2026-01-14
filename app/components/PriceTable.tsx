@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useCryptoPrices } from '../hooks/useCryptoPrices';
 import { useNotifications } from '../hooks/useNotifications';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 import { type TimeframeType, getTimeframeConfig } from '../lib/timeframe';
 import { calculateHighlightingFlags, getMinutesUntilNextInterval, getHighlightedColumn } from '../utils/price';
 import SymbolInput from './PriceTable/SymbolInput';
@@ -20,9 +21,10 @@ const INITIAL_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT'];
 type DisplayType = 'wma' | 'max-range';
 
 export default function PriceTable() {
-  const [timeframe, setTimeframe] = useState<TimeframeType>('15m');
-  const [displayType, setDisplayType] = useState<DisplayType>('max-range');
-  const [multiplier, setMultiplier] = useState<number>(100);
+  const [timeframe, setTimeframe] = useLocalStorage<TimeframeType>('crypto-dashboard-timeframe', '15m');
+  const [displayType, setDisplayType] = useLocalStorage<DisplayType>('crypto-dashboard-display-type', 'max-range');
+  const [multiplier, setMultiplier] = useLocalStorage<number>('crypto-dashboard-multiplier', 100);
+  const [showMore, setShowMore] = useLocalStorage<boolean>('crypto-dashboard-show-more', false);
   
   const {
     symbols,
@@ -187,6 +189,8 @@ export default function PriceTable() {
           onDisplayTypeChange={setDisplayType}
           onMultiplierChange={setMultiplier}
           highlightingFlags={highlightingFlags}
+          showMore={showMore}
+          onShowMoreChange={setShowMore}
         />
 
         {error && (

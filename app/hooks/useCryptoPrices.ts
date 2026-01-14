@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { getPrices, getCandleCloses, get1mCandlesBatch, type BinancePrice, type Candle, BinanceRateLimitError } from '../lib/binance';
 import { calculateMaxRanges } from '../utils/price';
 import { type TimeframeType, getTimeframeConfig } from '../lib/timeframe';
+import { useLocalStorage } from './useLocalStorage';
 
 const POLL_INTERVAL = 5000; // 5 seconds
 const CANDLE_POLL_INTERVAL = 60000; // 1 minute for 15m candle data
@@ -30,7 +31,7 @@ export function useCryptoPrices(
   const { initialSymbols = [], timeframe = '15m' } = options;
   const timeframeConfig = getTimeframeConfig(timeframe);
   
-  const [symbols, setSymbols] = useState<string[]>(initialSymbols);
+  const [symbols, setSymbols] = useLocalStorage<string[]>('crypto-dashboard-symbols', initialSymbols);
   const [prices, setPrices] = useState<BinancePrice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +42,7 @@ export function useCryptoPrices(
   const candle1mIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const backoffTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const currentIntervalRef = useRef<number>(POLL_INTERVAL);
-  const symbolsRef = useRef<string[]>(initialSymbols);
+  const symbolsRef = useRef<string[]>(symbols);
   const candles1mRef = useRef<Map<string, Candle[]>>(new Map());
 
   const setupPolling = (interval: number) => {
@@ -255,7 +256,7 @@ export function useCryptoPrices(
     symbolsRef.current = newSymbols;
   };
 
-  // Update ref when symbols change
+  // Update ref when symbols change (for localStorage persistence)
   useEffect(() => {
     symbolsRef.current = symbols;
   }, [symbols]);
