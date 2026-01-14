@@ -76,9 +76,12 @@ export default function PriceTable() {
 
       // If symbol just became highlighted (transitioned from null to a color)
       if (!wasHighlighted && isHighlighted) {
+        const highlightColor = currentFlags[symbol];
+        // 1 beep for yellow (WMA threshold), 3 beeps for green (max-range threshold)
+        const beepCount = highlightColor === 'green' ? 3 : 1;
         notify(`${symbol} ${timeframeConfig.label}`, {
           body: 'Deviation exceeds expected range',
-        });
+        }, beepCount);
       }
     });
 

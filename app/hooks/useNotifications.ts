@@ -4,13 +4,14 @@ import {
   requestNotificationPermission,
   getNotificationPermission,
   showNotification,
-  type NotificationPermission as NotificationPermissionType,
 } from '../utils/notifications';
+
+type NotificationPermissionType = NotificationPermission | null;
 
 export interface UseNotificationsReturn {
   permission: NotificationPermissionType | null;
   isSupported: boolean;
-  notify: (title: string, options?: NotificationOptions) => void;
+  notify: (title: string, options?: NotificationOptions, beepCount?: number) => void;
 }
 
 /**
@@ -45,11 +46,11 @@ export function useNotifications(): UseNotificationsReturn {
   }, [isSupported]);
 
   const notify = useCallback(
-    (title: string, options?: NotificationOptions) => {
+    (title: string, options?: NotificationOptions, beepCount?: number) => {
       if (!isSupported || permission !== 'granted') {
         return;
       }
-      showNotification(title, options);
+      showNotification(title, options, beepCount);
     },
     [isSupported, permission]
   );

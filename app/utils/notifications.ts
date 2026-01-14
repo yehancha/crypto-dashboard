@@ -34,9 +34,10 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 }
 
 /**
- * Plays a notification sound using Web Audio API (3 beeps)
+ * Plays a notification sound using Web Audio API
+ * @param beepCount Number of beeps to play (default: 3)
  */
-function playNotificationSound(): void {
+function playNotificationSound(beepCount: number = 3): void {
   if (typeof window === 'undefined' || !window.AudioContext && !(window as any).webkitAudioContext) {
     return;
   }
@@ -45,12 +46,12 @@ function playNotificationSound(): void {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     const audioContext = new AudioContext();
 
-    // Play 3 beeps with 150ms delay between them
+    // Play beeps with 150ms delay between them
     const beepDuration = 0.1;
     const beepGap = 0.15;
     const baseTime = audioContext.currentTime;
 
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < beepCount; i++) {
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
 
@@ -80,11 +81,13 @@ function playNotificationSound(): void {
  * Shows a system notification
  * @param title The notification title
  * @param options Optional notification options (body, icon, tag, etc.)
+ * @param beepCount Optional number of beeps to play (default: 3)
  * @returns The Notification object, or null if permission is not granted
  */
 export function showNotification(
   title: string,
-  options?: NotificationOptions
+  options?: NotificationOptions,
+  beepCount?: number
 ): Notification | null {
   if (!isNotificationSupported() || typeof window === 'undefined') {
     return null;
@@ -94,8 +97,8 @@ export function showNotification(
     return null;
   }
 
-  // Play notification sound
-  playNotificationSound();
+  // Play notification sound with specified beep count
+  playNotificationSound(beepCount ?? 3);
 
   return new Notification(title, options);
 }
