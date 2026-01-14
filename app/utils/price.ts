@@ -61,6 +61,17 @@ export function formatDeviation(deviation: number | null): string {
 }
 
 /**
+ * Formats percentage as an absolute value without sign
+ * @param percentage Percentage value as a number
+ * @returns Formatted string like "1.23%" (no sign)
+ */
+export function formatAbsolutePercentage(percentage: number | null): string {
+  if (percentage === null || isNaN(percentage)) return '—';
+  
+  return `${Math.abs(percentage).toFixed(2)}%`;
+}
+
+/**
  * Formats both absolute and percentage deviation
  * @param absoluteDeviation Absolute deviation as a number
  * @param percentageDeviation Percentage deviation as a number

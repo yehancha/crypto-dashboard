@@ -2,7 +2,9 @@
 
 import { type BinancePrice } from '../../lib/binance';
 import { type TimeframeType } from '../../lib/timeframe';
-import { formatPrice, calculateAbsoluteDeviation, calculateDeviation, formatDeviationWithAbsolute } from '../../utils/price';
+import { formatPrice, calculateAbsoluteDeviation, calculateDeviation, formatDeviationWithAbsolute, formatRangeOnly, formatWMA, formatAbsolutePercentage } from '../../utils/price';
+
+type DisplayType = 'wma' | 'max-range';
 
 interface PriceTableRowProps {
   item: BinancePrice;
@@ -17,6 +19,9 @@ interface PriceTableRowProps {
   onDragEnd: () => void;
   onRemove: (symbol: string) => void;
   isHighlighted?: boolean;
+  highlightedColumn: number;
+  multiplier: number;
+  displayType: DisplayType;
 }
 
 export default function PriceTableRow({
@@ -32,6 +37,9 @@ export default function PriceTableRow({
   onDragEnd,
   onRemove,
   isHighlighted = false,
+  highlightedColumn,
+  multiplier,
+  displayType,
 }: PriceTableRowProps) {
   return (
     <tr
@@ -117,6 +125,65 @@ export default function PriceTableRow({
               {deviationText}
             </span>
           );
+        })()}
+      </td>
+      <td className="px-6 py-4 text-right text-sm text-zinc-600 dark:text-zinc-400">
+        {(() => {
+          const closePrice = timeframe === '15m' ? item.close15m : item.close1h;
+          const range = item.maxRanges?.find(r => r.windowSize === highlightedColumn);
+          
+          if (!range || !closePrice) {
+            return '—';
+          }
+          
+          const multiplierRatio = multiplier / 100;
+          const closePriceNum = parseFloat(closePrice);
+          
+          if (displayType === 'wma') {
+            // Show WMA value when displayType is 'wma'
+            if (!range.wma || range.wma === 0) {
+              return '—';
+            }
+            
+            const wmaFormatted = formatWMA(range.wma, multiplierRatio);
+            
+            if (isNaN(closePriceNum) || closePriceNum === 0) {
+              return wmaFormatted;
+            }
+            
+            const adjustedWMA = (range.wma ?? 0) * multiplierRatio;
+            const percentage = (adjustedWMA / closePriceNum) * 100;
+            const percentageFormatted = formatAbsolutePercentage(percentage);
+            
+            return (
+              <div className="flex flex-col">
+                <span className="font-semibold">{wmaFormatted}</span>
+                <span>{percentageFormatted}</span>
+              </div>
+            );
+          } else {
+            // Show R value when displayType is 'max-range'
+            if (range.range === 0) {
+              return '—';
+            }
+            
+            const rangeFormatted = formatRangeOnly(range, multiplierRatio);
+            
+            if (isNaN(closePriceNum) || closePriceNum === 0) {
+              return rangeFormatted;
+            }
+            
+            const adjustedRange = range.range * multiplierRatio;
+            const percentage = (adjustedRange / closePriceNum) * 100;
+            const percentageFormatted = formatAbsolutePercentage(percentage);
+            
+            return (
+              <div className="flex flex-col">
+                <span className="font-semibold">{rangeFormatted}</span>
+                <span>{percentageFormatted}</span>
+              </div>
+            );
+          }
         })()}
       </td>
     </tr>

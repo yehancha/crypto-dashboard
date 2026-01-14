@@ -154,7 +154,7 @@ export default function PriceTable() {
 
         <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
           <table className="w-full">
-            <PriceTableHeader timeframe={timeframe} />
+            <PriceTableHeader timeframe={timeframe} highlightedColumn={highlightedColumn} />
             <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
               {prices.length === 0 ? (
                 <EmptyState />
@@ -174,6 +174,9 @@ export default function PriceTable() {
                     onDragEnd={handleDragEnd}
                     onRemove={removeSymbol}
                     isHighlighted={highlightingFlags[item.symbol] ?? false}
+                    highlightedColumn={highlightedColumn}
+                    multiplier={multiplier}
+                    displayType={displayType}
                   />
                 ))
               )}

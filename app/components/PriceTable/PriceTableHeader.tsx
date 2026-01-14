@@ -5,9 +5,10 @@ import { getTimeframeConfig } from '../../lib/timeframe';
 
 interface PriceTableHeaderProps {
   timeframe: TimeframeType;
+  highlightedColumn: number;
 }
 
-export default function PriceTableHeader({ timeframe }: PriceTableHeaderProps) {
+export default function PriceTableHeader({ timeframe, highlightedColumn }: PriceTableHeaderProps) {
   const config = getTimeframeConfig(timeframe);
   
   return (
@@ -30,6 +31,9 @@ export default function PriceTableHeader({ timeframe }: PriceTableHeaderProps) {
         </th>
         <th className="px-6 py-4 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
           Deviation
+        </th>
+        <th className="px-6 py-4 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          Threshold {highlightedColumn}m
         </th>
       </tr>
     </thead>
