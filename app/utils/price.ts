@@ -285,3 +285,64 @@ export function getMinutesUntilNext15MinInterval(): number {
 export function getHighlightedColumn(minutesRemaining: number, maxWindowSize: number): number {
   return Math.min(maxWindowSize, Math.max(1, Math.ceil(minutesRemaining)));
 }
+
+/**
+ * Calculates highlighting flags for symbols based on whether absolute deviation exceeds expected range
+ * @param prices Array of BinancePrice objects
+ * @param displayType Display type: 'wma' or 'max-range'
+ * @param multiplier Multiplier percentage (e.g., 100 for 100%)
+ * @param timeframe Timeframe type: '15m' or '1h'
+ * @param highlightedColumn The highlighted column window size
+ * @returns Record mapping symbol to boolean indicating if row should be highlighted
+ */
+export function calculateHighlightingFlags(
+  prices: Array<{ symbol: string; price: string; close15m?: string; close1h?: string; maxRanges?: MaxRange[] }>,
+  displayType: 'wma' | 'max-range',
+  multiplier: number,
+  timeframe: '15m' | '1h',
+  highlightedColumn: number
+): Record<string, boolean> {
+  const flags: Record<string, boolean> = {};
+  const multiplierRatio = multiplier / 100;
+
+  for (const item of prices) {
+    // Get the close price based on timeframe
+    const closePrice = timeframe === '15m' ? item.close15m : item.close1h;
+    if (!closePrice) {
+      flags[item.symbol] = false;
+      continue;
+    }
+
+    // Get the highlighted column's MaxRange
+    const range = item.maxRanges?.find(r => r.windowSize === highlightedColumn);
+    if (!range || range.range === 0) {
+      flags[item.symbol] = false;
+      continue;
+    }
+
+    // Calculate expected range based on display type
+    const expectedRange = displayType === 'wma' 
+      ? (range.wma ?? 0) * multiplierRatio
+      : range.range * multiplierRatio;
+
+    if (expectedRange === 0) {
+      flags[item.symbol] = false;
+      continue;
+    }
+
+    // Calculate absolute deviation
+    const currentPrice = parseFloat(item.price);
+    const closePriceNum = parseFloat(closePrice);
+    if (isNaN(currentPrice) || isNaN(closePriceNum)) {
+      flags[item.symbol] = false;
+      continue;
+    }
+
+    const absoluteDeviation = Math.abs(currentPrice - closePriceNum);
+
+    // Highlight if absolute deviation exceeds expected range
+    flags[item.symbol] = absoluteDeviation > expectedRange;
+  }
+
+  return flags;
+}

@@ -6,17 +6,28 @@ import { type TimeframeType } from '../../lib/timeframe';
 import { getTimeframeConfig } from '../../lib/timeframe';
 import { formatRangeDisplay, formatRangeOnly, formatWMA, getMinutesUntilNextInterval, getHighlightedColumn } from '../../utils/price';
 
+type DisplayType = 'wma' | 'max-range';
+
 interface MaxRangeTableProps {
   prices: BinancePrice[];
   timeframe: TimeframeType;
+  displayType: DisplayType;
+  multiplier: number;
+  onDisplayTypeChange: (value: DisplayType) => void;
+  onMultiplierChange: (value: number) => void;
+  highlightingFlags?: Record<string, boolean>;
 }
 
-type DisplayType = 'wma' | 'max-range';
-
-export default function MaxRangeTable({ prices, timeframe }: MaxRangeTableProps) {
+export default function MaxRangeTable({ 
+  prices, 
+  timeframe,
+  displayType,
+  multiplier,
+  onDisplayTypeChange,
+  onMultiplierChange,
+  highlightingFlags = {},
+}: MaxRangeTableProps) {
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
-  const [multiplier, setMultiplier] = useState<number>(100);
-  const [displayType, setDisplayType] = useState<DisplayType>('max-range');
   const [showMore, setShowMore] = useState<boolean>(false);
   
   const timeframeConfig = getTimeframeConfig(timeframe);
@@ -61,7 +72,7 @@ export default function MaxRangeTable({ prices, timeframe }: MaxRangeTableProps)
             <select
               id="display-type-select"
               value={displayType}
-              onChange={(e) => setDisplayType(e.target.value as DisplayType)}
+              onChange={(e) => onDisplayTypeChange(e.target.value as DisplayType)}
               className="px-3 py-1.5 text-sm rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="wma">WMA</option>
@@ -75,7 +86,7 @@ export default function MaxRangeTable({ prices, timeframe }: MaxRangeTableProps)
             <select
               id="multiplier-select"
               value={multiplier}
-              onChange={(e) => setMultiplier(Number(e.target.value))}
+              onChange={(e) => onMultiplierChange(Number(e.target.value))}
               className="px-3 py-1.5 text-sm rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {multiplierOptions.map((value) => (
@@ -119,10 +130,14 @@ export default function MaxRangeTable({ prices, timeframe }: MaxRangeTableProps)
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-          {prices.map((item) => (
+          {prices.map((item) => {
+            const isHighlighted = highlightingFlags[item.symbol] ?? false;
+            return (
             <tr
               key={item.symbol}
-              className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+              className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors ${
+                isHighlighted ? 'bg-amber-100 dark:bg-amber-950/50 border-l-4 border-l-amber-500 dark:border-l-amber-600' : ''
+              }`}
             >
               <td className="px-6 py-4 text-sm font-medium text-zinc-900 dark:text-zinc-50">
                 {item.symbol}
@@ -174,7 +189,8 @@ export default function MaxRangeTable({ prices, timeframe }: MaxRangeTableProps)
                 );
               })}
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
       </div>

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useCryptoPrices } from '../hooks/useCryptoPrices';
-import { type TimeframeType } from '../lib/timeframe';
+import { type TimeframeType, getTimeframeConfig } from '../lib/timeframe';
+import { calculateHighlightingFlags, getMinutesUntilNextInterval, getHighlightedColumn } from '../utils/price';
 import SymbolInput from './PriceTable/SymbolInput';
 import TimeframeSelector from './PriceTable/TimeframeSelector';
 import PriceTableHeader from './PriceTable/PriceTableHeader';
@@ -15,8 +16,12 @@ import ErrorState from './PriceTable/ErrorState';
 
 const INITIAL_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT'];
 
+type DisplayType = 'wma' | 'max-range';
+
 export default function PriceTable() {
   const [timeframe, setTimeframe] = useState<TimeframeType>('15m');
+  const [displayType, setDisplayType] = useState<DisplayType>('max-range');
+  const [multiplier, setMultiplier] = useState<number>(100);
   
   const {
     symbols,
@@ -32,6 +37,15 @@ export default function PriceTable() {
   const [newSymbol, setNewSymbol] = useState('');
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const timeframeConfig = getTimeframeConfig(timeframe);
+  const minutesRemaining = getMinutesUntilNextInterval(timeframeConfig.intervalMinutes);
+  const highlightedColumn = getHighlightedColumn(minutesRemaining, timeframeConfig.maxWindowSize);
+
+  // Calculate highlighting flags
+  const highlightingFlags = useMemo(() => {
+    return calculateHighlightingFlags(prices, displayType, multiplier, timeframe, highlightedColumn);
+  }, [prices, displayType, multiplier, timeframe, highlightedColumn]);
 
   const handleAddSymbol = () => {
     const trimmedSymbol = newSymbol.trim().toUpperCase();
@@ -120,6 +134,7 @@ export default function PriceTable() {
                     onDrop={handleDrop}
                     onDragEnd={handleDragEnd}
                     onRemove={removeSymbol}
+                    isHighlighted={highlightingFlags[item.symbol] ?? false}
                   />
                 ))
               )}
@@ -127,7 +142,15 @@ export default function PriceTable() {
           </table>
         </div>
 
-        <MaxRangeTable prices={prices} timeframe={timeframe} />
+        <MaxRangeTable 
+          prices={prices} 
+          timeframe={timeframe}
+          displayType={displayType}
+          multiplier={multiplier}
+          onDisplayTypeChange={setDisplayType}
+          onMultiplierChange={setMultiplier}
+          highlightingFlags={highlightingFlags}
+        />
 
         {error && (
           <ErrorDisplay

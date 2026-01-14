@@ -16,6 +16,7 @@ interface PriceTableRowProps {
   onDrop: (e: React.DragEvent, index: number) => void;
   onDragEnd: () => void;
   onRemove: (symbol: string) => void;
+  isHighlighted?: boolean;
 }
 
 export default function PriceTableRow({
@@ -30,6 +31,7 @@ export default function PriceTableRow({
   onDrop,
   onDragEnd,
   onRemove,
+  isHighlighted = false,
 }: PriceTableRowProps) {
   return (
     <tr
@@ -41,7 +43,9 @@ export default function PriceTableRow({
       onDragEnd={onDragEnd}
       className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors ${
         isDragged ? 'opacity-50 cursor-grabbing' : 'cursor-grab'
-      } ${isDragOver ? 'bg-zinc-100 dark:bg-zinc-800' : ''}`}
+      } ${isDragOver ? 'bg-zinc-100 dark:bg-zinc-800' : ''} ${
+        isHighlighted ? 'bg-amber-100 dark:bg-amber-950/50 border-l-4 border-l-amber-500 dark:border-l-amber-600' : ''
+      }`}
     >
       <td className="px-4 py-4">
         <div
