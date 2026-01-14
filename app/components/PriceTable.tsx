@@ -8,6 +8,7 @@ import { type TimeframeType, getTimeframeConfig } from '../lib/timeframe';
 import { calculateHighlightingFlags, getMinutesUntilNextInterval, getHighlightedColumn } from '../utils/price';
 import SymbolInput from './PriceTable/SymbolInput';
 import TimeframeSelector from './PriceTable/TimeframeSelector';
+import CandleCountdown from './PriceTable/CandleCountdown';
 import PriceTableHeader from './PriceTable/PriceTableHeader';
 import PriceTableRow from './PriceTable/PriceTableRow';
 import MaxRangeTable from './PriceTable/MaxRangeTable';
@@ -69,16 +70,21 @@ export default function PriceTable() {
     const previousFlags = previousHighlightingFlagsRef.current;
     const currentFlags = highlightingFlags;
 
-    // Find symbols that transitioned from not highlighted to highlighted
+    // Find symbols that transitioned to highlighted or escalated from yellow to green
     Object.keys(currentFlags).forEach((symbol) => {
-      const wasHighlighted = previousFlags[symbol] !== null;
-      const isHighlighted = currentFlags[symbol] !== null;
+      const previousColor = previousFlags[symbol] ?? null;
+      const currentColor = currentFlags[symbol] ?? null;
 
-      // If symbol just became highlighted (transitioned from null to a color)
-      if (!wasHighlighted && isHighlighted) {
-        const highlightColor = currentFlags[symbol];
+      // Trigger notification if:
+      // 1. Transitioned from null to any color (new highlight)
+      // 2. Transitioned from yellow to green (escalation)
+      const shouldNotify = 
+        (previousColor === null && currentColor !== null) || // null → yellow/green
+        (previousColor === 'yellow' && currentColor === 'green'); // yellow → green
+
+      if (shouldNotify) {
         // 1 beep for yellow (WMA threshold), 3 beeps for green (max-range threshold)
-        const beepCount = highlightColor === 'green' ? 3 : 1;
+        const beepCount = currentColor === 'green' ? 3 : 1;
         notify(`${symbol} ${timeframeConfig.label}`, {
           body: 'Deviation exceeds expected range',
         }, beepCount);
@@ -145,7 +151,10 @@ export default function PriceTable() {
           <h1 className="text-3xl font-semibold text-black dark:text-zinc-50">
             Crypto Prices
           </h1>
-          <TimeframeSelector value={timeframe} onChange={setTimeframe} />
+          <div className="flex items-center gap-4">
+            <CandleCountdown timeframe={timeframe} />
+            <TimeframeSelector value={timeframe} onChange={setTimeframe} />
+          </div>
         </div>
 
         <SymbolInput
