@@ -1,11 +1,13 @@
 'use client';
 
 import { type BinancePrice } from '../../lib/binance';
+import { type TimeframeType } from '../../lib/timeframe';
 import { formatPrice, calculateAbsoluteDeviation, calculateDeviation, formatDeviationWithAbsolute } from '../../utils/price';
 
 interface PriceTableRowProps {
   item: BinancePrice;
   index: number;
+  timeframe: TimeframeType;
   isDragged: boolean;
   isDragOver: boolean;
   onDragStart: (index: number) => void;
@@ -19,6 +21,7 @@ interface PriceTableRowProps {
 export default function PriceTableRow({
   item,
   index,
+  timeframe,
   isDragged,
   isDragOver,
   onDragStart,
@@ -80,15 +83,19 @@ export default function PriceTableRow({
         {item.symbol}
       </td>
       <td className="px-6 py-4 text-right text-sm text-zinc-600 dark:text-zinc-400">
-        {item.close15m ? formatPrice(item.close15m) : '—'}
+        {(() => {
+          const closePrice = timeframe === '15m' ? item.close15m : item.close1h;
+          return closePrice ? formatPrice(closePrice) : '—';
+        })()}
       </td>
       <td className="px-6 py-4 text-right text-sm text-zinc-600 dark:text-zinc-400">
         {formatPrice(item.price)}
       </td>
       <td className="px-6 py-4 text-right text-sm font-medium">
         {(() => {
-          const absoluteDeviation = calculateAbsoluteDeviation(item.price, item.close15m);
-          const percentageDeviation = calculateDeviation(item.price, item.close15m);
+          const closePrice = timeframe === '15m' ? item.close15m : item.close1h;
+          const absoluteDeviation = calculateAbsoluteDeviation(item.price, closePrice);
+          const percentageDeviation = calculateDeviation(item.price, closePrice);
           const deviationText = formatDeviationWithAbsolute(absoluteDeviation, percentageDeviation);
           const isPositive = absoluteDeviation !== null && absoluteDeviation > 0;
           const isNegative = absoluteDeviation !== null && absoluteDeviation < 0;

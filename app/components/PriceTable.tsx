@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import { useCryptoPrices } from '../hooks/useCryptoPrices';
+import { type TimeframeType } from '../lib/timeframe';
 import SymbolInput from './PriceTable/SymbolInput';
+import TimeframeSelector from './PriceTable/TimeframeSelector';
 import PriceTableHeader from './PriceTable/PriceTableHeader';
 import PriceTableRow from './PriceTable/PriceTableRow';
 import MaxRangeTable from './PriceTable/MaxRangeTable';
@@ -14,6 +16,8 @@ import ErrorState from './PriceTable/ErrorState';
 const INITIAL_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT'];
 
 export default function PriceTable() {
+  const [timeframe, setTimeframe] = useState<TimeframeType>('15m');
+  
   const {
     symbols,
     prices,
@@ -23,7 +27,7 @@ export default function PriceTable() {
     addSymbol,
     removeSymbol,
     reorderSymbols,
-  } = useCryptoPrices({ initialSymbols: INITIAL_SYMBOLS });
+  } = useCryptoPrices({ initialSymbols: INITIAL_SYMBOLS, timeframe });
 
   const [newSymbol, setNewSymbol] = useState('');
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -81,9 +85,12 @@ export default function PriceTable() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black p-8">
       <div className="w-full max-w-full">
-        <h1 className="mb-8 text-3xl font-semibold text-black dark:text-zinc-50">
-          Crypto Prices
-        </h1>
+        <div className="mb-8 flex items-center justify-between">
+          <h1 className="text-3xl font-semibold text-black dark:text-zinc-50">
+            Crypto Prices
+          </h1>
+          <TimeframeSelector value={timeframe} onChange={setTimeframe} />
+        </div>
 
         <SymbolInput
           value={newSymbol}
@@ -94,7 +101,7 @@ export default function PriceTable() {
 
         <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
           <table className="w-full">
-            <PriceTableHeader />
+            <PriceTableHeader timeframe={timeframe} />
             <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
               {prices.length === 0 ? (
                 <EmptyState />
@@ -104,6 +111,7 @@ export default function PriceTable() {
                     key={item.symbol}
                     item={item}
                     index={index}
+                    timeframe={timeframe}
                     isDragged={draggedIndex === index}
                     isDragOver={dragOverIndex === index}
                     onDragStart={handleDragStart}
@@ -119,7 +127,7 @@ export default function PriceTable() {
           </table>
         </div>
 
-        <MaxRangeTable prices={prices} />
+        <MaxRangeTable prices={prices} timeframe={timeframe} />
 
         {error && (
           <ErrorDisplay

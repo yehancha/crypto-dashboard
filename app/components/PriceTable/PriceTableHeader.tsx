@@ -1,6 +1,15 @@
 'use client';
 
-export default function PriceTableHeader() {
+import { type TimeframeType } from '../../lib/timeframe';
+import { getTimeframeConfig } from '../../lib/timeframe';
+
+interface PriceTableHeaderProps {
+  timeframe: TimeframeType;
+}
+
+export default function PriceTableHeader({ timeframe }: PriceTableHeaderProps) {
+  const config = getTimeframeConfig(timeframe);
+  
   return (
     <thead className="bg-zinc-100 dark:bg-zinc-800">
       <tr>
@@ -14,7 +23,7 @@ export default function PriceTableHeader() {
           Symbol
         </th>
         <th className="px-6 py-4 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-          15m Close
+          {config.label} Close
         </th>
         <th className="px-6 py-4 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
           Price

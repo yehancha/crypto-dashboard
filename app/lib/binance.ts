@@ -19,8 +19,9 @@ export interface BinancePrice {
   symbol: string;
   price: string;
   close15m?: string; // 15-minute candle close price
-  candles1m?: Candle[]; // 1-minute candles (up to 60)
-  maxRanges?: MaxRange[]; // Max ranges for windows 15, 14, ..., 1
+  close1h?: string; // 1-hour candle close price
+  candles1m?: Candle[]; // 1-minute candles (up to 60 or 600 depending on timeframe)
+  maxRanges?: MaxRange[]; // Max ranges for windows (15, 14, ..., 1 or 60, 59, ..., 1 depending on timeframe)
 }
 
 export class BinanceRateLimitError extends Error {
@@ -82,16 +83,17 @@ export async function getPrices(symbols: string[]): Promise<BinancePrice[]> {
 }
 
 /**
- * Fetches the last 15-minute candle close price for a symbol from Binance API
+ * Generic function to fetch the last candle close price for a symbol from Binance API
  * @param symbol Trading pair symbol (e.g., 'BTCUSDT')
- * @returns Promise with the close price of the last 15m candle
+ * @param interval Candle interval (e.g., '15m', '1h')
+ * @returns Promise with the close price of the last candle
  * @throws BinanceRateLimitError if rate limited (429) or IP banned (418)
  * 
  * Weight: 2 per request
  */
-export async function get15mCandleClose(symbol: string): Promise<string> {
+export async function getCandleClose(symbol: string, interval: string): Promise<string> {
   try {
-    const url = `${BINANCE_API_BASE}/api/v3/klines?symbol=${symbol}&interval=15m&limit=1`;
+    const url = `${BINANCE_API_BASE}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=1`;
     
     const response = await fetch(url, {
       next: { revalidate: 0 }, // Always fetch fresh data
@@ -128,30 +130,44 @@ export async function get15mCandleClose(symbol: string): Promise<string> {
       throw error;
     }
     
-    console.error(`Error fetching 15m candle for ${symbol}:`, error);
+    console.error(`Error fetching ${interval} candle for ${symbol}:`, error);
     throw error;
   }
 }
 
 /**
- * Fetches 15-minute candle close prices for multiple symbols
+ * Fetches the last 15-minute candle close price for a symbol from Binance API
+ * @param symbol Trading pair symbol (e.g., 'BTCUSDT')
+ * @returns Promise with the close price of the last 15m candle
+ * @throws BinanceRateLimitError if rate limited (429) or IP banned (418)
+ * 
+ * Weight: 2 per request
+ * @deprecated Use getCandleClose(symbol, '15m') instead
+ */
+export async function get15mCandleClose(symbol: string): Promise<string> {
+  return getCandleClose(symbol, '15m');
+}
+
+/**
+ * Generic function to fetch candle close prices for multiple symbols
  * @param symbols Array of trading pair symbols (e.g., ['BTCUSDT', 'ETHUSDT'])
+ * @param interval Candle interval (e.g., '15m', '1h')
  * @returns Promise with map of symbol to close price
  * @throws BinanceRateLimitError if rate limited (429) or IP banned (418)
  * 
  * Weight: 2 per symbol per request
  */
-export async function get15mCandleCloses(symbols: string[]): Promise<Record<string, string>> {
+export async function getCandleCloses(symbols: string[], interval: string): Promise<Record<string, string>> {
   const results: Record<string, string> = {};
   
   // Fetch all candles in parallel
   const promises = symbols.map(async (symbol) => {
     try {
-      const closePrice = await get15mCandleClose(symbol);
+      const closePrice = await getCandleClose(symbol, interval);
       return { symbol, closePrice };
     } catch (error) {
       // Log error but don't fail entire batch
-      console.error(`Failed to fetch 15m candle for ${symbol}:`, error);
+      console.error(`Failed to fetch ${interval} candle for ${symbol}:`, error);
       return { symbol, closePrice: undefined };
     }
   });
@@ -165,6 +181,19 @@ export async function get15mCandleCloses(symbols: string[]): Promise<Record<stri
   });
   
   return results;
+}
+
+/**
+ * Fetches 15-minute candle close prices for multiple symbols
+ * @param symbols Array of trading pair symbols (e.g., ['BTCUSDT', 'ETHUSDT'])
+ * @returns Promise with map of symbol to close price
+ * @throws BinanceRateLimitError if rate limited (429) or IP banned (418)
+ * 
+ * Weight: 2 per symbol per request
+ * @deprecated Use getCandleCloses(symbols, '15m') instead
+ */
+export async function get15mCandleCloses(symbols: string[]): Promise<Record<string, string>> {
+  return getCandleCloses(symbols, '15m');
 }
 
 /**

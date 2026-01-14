@@ -2,18 +2,23 @@
 
 import { useState, useEffect } from 'react';
 import { type BinancePrice } from '../../lib/binance';
-import { formatRangeDisplay, formatRangeOnly, formatWMA, getMinutesUntilNext15MinInterval, getHighlightedColumn } from '../../utils/price';
+import { type TimeframeType } from '../../lib/timeframe';
+import { getTimeframeConfig } from '../../lib/timeframe';
+import { formatRangeDisplay, formatRangeOnly, formatWMA, getMinutesUntilNextInterval, getHighlightedColumn } from '../../utils/price';
 
 interface MaxRangeTableProps {
   prices: BinancePrice[];
+  timeframe: TimeframeType;
 }
 
 type DisplayType = 'wma' | 'max-range';
 
-export default function MaxRangeTable({ prices }: MaxRangeTableProps) {
+export default function MaxRangeTable({ prices, timeframe }: MaxRangeTableProps) {
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [multiplier, setMultiplier] = useState<number>(100);
   const [displayType, setDisplayType] = useState<DisplayType>('wma');
+  
+  const timeframeConfig = getTimeframeConfig(timeframe);
 
   useEffect(() => {
     // Update time every second
@@ -24,9 +29,9 @@ export default function MaxRangeTable({ prices }: MaxRangeTableProps) {
     return () => clearInterval(interval);
   }, []);
 
-  // Calculate highlighted column
-  const minutesRemaining = getMinutesUntilNext15MinInterval();
-  const highlightedColumn = getHighlightedColumn(minutesRemaining);
+  // Calculate highlighted column based on timeframe
+  const minutesRemaining = getMinutesUntilNextInterval(timeframeConfig.intervalMinutes);
+  const highlightedColumn = getHighlightedColumn(minutesRemaining, timeframeConfig.maxWindowSize);
 
   // Generate multiplier options from 10% to 200% in 10% increments
   const multiplierOptions = Array.from({ length: 20 }, (_, i) => (i + 1) * 10);
@@ -88,7 +93,7 @@ export default function MaxRangeTable({ prices }: MaxRangeTableProps) {
             >
               {highlightedColumn}m
             </th>
-            {Array.from({ length: 15 }, (_, i) => 15 - i).map((windowSize) => {
+            {Array.from({ length: timeframeConfig.columnCount }, (_, i) => timeframeConfig.maxWindowSize - i).map((windowSize) => {
               const isHighlighted = windowSize === highlightedColumn;
               return (
                 <th
@@ -144,7 +149,7 @@ export default function MaxRangeTable({ prices }: MaxRangeTableProps) {
                   }
                 })()}
               </td>
-              {Array.from({ length: 15 }, (_, i) => 15 - i).map((windowSize) => {
+              {Array.from({ length: timeframeConfig.columnCount }, (_, i) => timeframeConfig.maxWindowSize - i).map((windowSize) => {
                 const range = item.maxRanges?.find(r => r.windowSize === windowSize);
                 const isHighlighted = windowSize === highlightedColumn;
                 return (

@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
-import { getPrices, get15mCandleCloses, get1mCandlesBatch, type BinancePrice, type Candle, BinanceRateLimitError } from '../lib/binance';
+import { getPrices, getCandleCloses, get1mCandlesBatch, type BinancePrice, type Candle, BinanceRateLimitError } from '../lib/binance';
 import { calculateMaxRanges } from '../utils/price';
+import { type TimeframeType, getTimeframeConfig } from '../lib/timeframe';
 
 const POLL_INTERVAL = 5000; // 5 seconds
 const CANDLE_POLL_INTERVAL = 60000; // 1 minute for 15m candle data
@@ -9,6 +10,7 @@ const MAX_BACKOFF_INTERVAL = 60000; // Maximum 60 seconds between retries
 
 export interface UseCryptoPricesOptions {
   initialSymbols?: string[];
+  timeframe?: TimeframeType;
 }
 
 export interface UseCryptoPricesReturn {
@@ -25,7 +27,8 @@ export interface UseCryptoPricesReturn {
 export function useCryptoPrices(
   options: UseCryptoPricesOptions = {}
 ): UseCryptoPricesReturn {
-  const { initialSymbols = [] } = options;
+  const { initialSymbols = [], timeframe = '15m' } = options;
+  const timeframeConfig = getTimeframeConfig(timeframe);
   
   const [symbols, setSymbols] = useState<string[]>(initialSymbols);
   const [prices, setPrices] = useState<BinancePrice[]>([]);
@@ -85,13 +88,22 @@ export function useCryptoPrices(
           const newPrice = data.find(item => item.symbol === symbol) || { symbol, price: '0' };
           const prevPrice = prevPriceMap.get(symbol);
           const candles = candles1mRef.current.get(symbol);
-          const maxRanges = candles ? calculateMaxRanges(candles) : undefined;
-          return {
+          const maxRanges = candles ? calculateMaxRanges(candles, timeframeConfig.maxWindowSize) : undefined;
+          
+          const updatedPrice: BinancePrice = {
             ...newPrice,
-            close15m: prevPrice?.close15m || newPrice.close15m,
             candles1m: prevPrice?.candles1m || candles,
             maxRanges: prevPrice?.maxRanges || maxRanges,
           };
+          
+          // Preserve close price based on timeframe
+          if (timeframe === '15m') {
+            updatedPrice.close15m = prevPrice?.close15m || newPrice.close15m;
+          } else {
+            updatedPrice.close1h = prevPrice?.close1h;
+          }
+          
+          return updatedPrice;
         });
       });
       setLoading(false);
@@ -145,25 +157,34 @@ export function useCryptoPrices(
     }
 
     try {
-      const candleCloses = await get15mCandleCloses(currentSymbols);
+      const candleCloses = await getCandleCloses(currentSymbols, timeframeConfig.candleInterval);
       
       // Update prices with candle close data
       setPrices((prevPrices) =>
         prevPrices.map((price) => {
           const prevCandles = candles1mRef.current.get(price.symbol);
-          const prevRanges = prevCandles ? calculateMaxRanges(prevCandles) : undefined;
-          return {
+          const prevRanges = prevCandles ? calculateMaxRanges(prevCandles, timeframeConfig.maxWindowSize) : undefined;
+          
+          const updatedPrice: BinancePrice = {
             ...price,
-            close15m: candleCloses[price.symbol] || price.close15m,
             candles1m: prevCandles,
             maxRanges: prevRanges,
           };
+          
+          // Update close price based on timeframe
+          if (timeframe === '15m') {
+            updatedPrice.close15m = candleCloses[price.symbol] || price.close15m;
+          } else {
+            updatedPrice.close1h = candleCloses[price.symbol] || price.close1h;
+          }
+          
+          return updatedPrice;
         })
       );
     } catch (err) {
       // Log error but don't update error state for candle data
       // to avoid interfering with main price fetching
-      console.error('Error fetching 15m candle closes:', err);
+      console.error(`Error fetching ${timeframeConfig.candleInterval} candle closes:`, err);
     }
   };
 
@@ -176,7 +197,8 @@ export function useCryptoPrices(
     }
 
     try {
-      const candlesData = await get1mCandlesBatch(currentSymbols, 60);
+      // Use timeframe config to determine candle limit (60 for 15m, 600 for 1h)
+      const candlesData = await get1mCandlesBatch(currentSymbols, timeframeConfig.candleLimit);
       
       // Update candles ref
       Object.entries(candlesData).forEach(([symbol, candles]) => {
@@ -189,7 +211,7 @@ export function useCryptoPrices(
       setPrices((prevPrices) =>
         prevPrices.map((price) => {
           const candles = candles1mRef.current.get(price.symbol);
-          const maxRanges = candles ? calculateMaxRanges(candles) : undefined;
+          const maxRanges = candles ? calculateMaxRanges(candles, timeframeConfig.maxWindowSize) : undefined;
           return {
             ...price,
             candles1m: candles,
@@ -265,7 +287,7 @@ export function useCryptoPrices(
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbols]);
+  }, [symbols, timeframe]);
 
   return {
     symbols,

@@ -142,15 +142,16 @@ export function calculateMaxRangeForWindow(
 }
 
 /**
- * Calculates maximum ranges for all window sizes from 15 down to 1
- * @param candles Array of candle data (should have at least 15 candles for full analysis)
- * @returns Array of MaxRange objects, one for each window size (15, 14, ..., 1)
+ * Calculates maximum ranges for all window sizes from maxWindowSize down to 1
+ * @param candles Array of candle data (should have at least maxWindowSize candles for full analysis)
+ * @param maxWindowSize Maximum window size to calculate (default: 15 for backward compatibility)
+ * @returns Array of MaxRange objects, one for each window size (maxWindowSize, maxWindowSize-1, ..., 1)
  */
-export function calculateMaxRanges(candles: Candle[]): MaxRange[] {
+export function calculateMaxRanges(candles: Candle[], maxWindowSize: number = 15): MaxRange[] {
   const ranges: MaxRange[] = [];
   
-  // Calculate for window sizes from 15 down to 1
-  for (let windowSize = 15; windowSize >= 1; windowSize--) {
+  // Calculate for window sizes from maxWindowSize down to 1
+  for (let windowSize = maxWindowSize; windowSize >= 1; windowSize--) {
     const range = calculateMaxRangeForWindow(candles, windowSize);
     if (range) {
       ranges.push(range);
@@ -230,30 +231,51 @@ export function formatWMA(wma: number | null | undefined, multiplier: number = 1
 }
 
 /**
- * Calculates the minutes remaining until the next 15-minute interval
- * @returns Number of minutes until the next 15-minute interval (0, 15, 30, 45)
+ * Generic function to calculate minutes remaining until the next interval
+ * @param intervalMinutes Interval in minutes (e.g., 15 for 15-minute intervals, 60 for hourly)
+ * @returns Number of minutes until the next interval
  */
-export function getMinutesUntilNext15MinInterval(): number {
+export function getMinutesUntilNextInterval(intervalMinutes: number): number {
   const now = new Date();
-  const currentMinute = now.getMinutes();
-  const nextIntervalMinute = Math.ceil(currentMinute / 15) * 15;
-  const nextInterval = new Date(now);
-  nextInterval.setMinutes(nextIntervalMinute, 0, 0);
   
-  // If we've already passed the calculated interval (shouldn't happen, but handle edge case)
-  if (nextInterval <= now) {
-    nextInterval.setHours(nextInterval.getHours() + 1);
-    nextInterval.setMinutes(0);
+  if (intervalMinutes === 60) {
+    // For hourly intervals, calculate minutes until next hour
+    const nextHour = new Date(now);
+    nextHour.setHours(nextHour.getHours() + 1);
+    nextHour.setMinutes(0, 0, 0);
+    return (nextHour.getTime() - now.getTime()) / (1000 * 60);
+  } else {
+    // For other intervals (e.g., 15 minutes)
+    const currentMinute = now.getMinutes();
+    const nextIntervalMinute = Math.ceil(currentMinute / intervalMinutes) * intervalMinutes;
+    const nextInterval = new Date(now);
+    nextInterval.setMinutes(nextIntervalMinute, 0, 0);
+    
+    // If we've already passed the calculated interval (shouldn't happen, but handle edge case)
+    if (nextInterval <= now) {
+      nextInterval.setHours(nextInterval.getHours() + 1);
+      nextInterval.setMinutes(0);
+    }
+    
+    return (nextInterval.getTime() - now.getTime()) / (1000 * 60);
   }
-  
-  return (nextInterval.getTime() - now.getTime()) / (1000 * 60);
 }
 
 /**
- * Determines which column to highlight based on minutes remaining until next 15-minute interval
- * @param minutesRemaining Number of minutes remaining
- * @returns Window size (1-15) to highlight
+ * Calculates the minutes remaining until the next 15-minute interval
+ * @returns Number of minutes until the next 15-minute interval (0, 15, 30, 45)
+ * @deprecated Use getMinutesUntilNextInterval(15) instead
  */
-export function getHighlightedColumn(minutesRemaining: number): number {
-  return Math.min(15, Math.max(1, Math.ceil(minutesRemaining)));
+export function getMinutesUntilNext15MinInterval(): number {
+  return getMinutesUntilNextInterval(15);
+}
+
+/**
+ * Generic function to determine which column to highlight based on minutes remaining
+ * @param minutesRemaining Number of minutes remaining until next interval
+ * @param maxWindowSize Maximum window size (e.g., 15 or 60)
+ * @returns Window size (1 to maxWindowSize) to highlight
+ */
+export function getHighlightedColumn(minutesRemaining: number, maxWindowSize: number): number {
+  return Math.min(maxWindowSize, Math.max(1, Math.ceil(minutesRemaining)));
 }
