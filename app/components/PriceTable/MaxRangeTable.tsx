@@ -8,9 +8,12 @@ interface MaxRangeTableProps {
   prices: BinancePrice[];
 }
 
+type DisplayType = 'wma' | 'max-range';
+
 export default function MaxRangeTable({ prices }: MaxRangeTableProps) {
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [multiplier, setMultiplier] = useState<number>(100);
+  const [displayType, setDisplayType] = useState<DisplayType>('wma');
 
   useEffect(() => {
     // Update time every second
@@ -38,22 +41,38 @@ export default function MaxRangeTable({ prices }: MaxRangeTableProps) {
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
           Max Range Analysis
         </h2>
-        <div className="flex items-center gap-2">
-          <label htmlFor="multiplier-select" className="text-sm text-zinc-600 dark:text-zinc-400">
-            Multiplier:
-          </label>
-          <select
-            id="multiplier-select"
-            value={multiplier}
-            onChange={(e) => setMultiplier(Number(e.target.value))}
-            className="px-3 py-1.5 text-sm rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            {multiplierOptions.map((value) => (
-              <option key={value} value={value}>
-                {value}%
-              </option>
-            ))}
-          </select>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <label htmlFor="display-type-select" className="text-sm text-zinc-600 dark:text-zinc-400">
+              Display:
+            </label>
+            <select
+              id="display-type-select"
+              value={displayType}
+              onChange={(e) => setDisplayType(e.target.value as DisplayType)}
+              className="px-3 py-1.5 text-sm rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="wma">WMA</option>
+              <option value="max-range">Max Range</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="multiplier-select" className="text-sm text-zinc-600 dark:text-zinc-400">
+              Multiplier:
+            </label>
+            <select
+              id="multiplier-select"
+              value={multiplier}
+              onChange={(e) => setMultiplier(Number(e.target.value))}
+              className="px-3 py-1.5 text-sm rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {multiplierOptions.map((value) => (
+                <option key={value} value={value}>
+                  {value}%
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
       <div className="overflow-x-auto">
@@ -107,12 +126,22 @@ export default function MaxRangeTable({ prices }: MaxRangeTableProps) {
                   }
                   const rangeFormatted = formatRangeOnly(range, multiplier / 100);
                   const wmaFormatted = formatWMA(range.wma, multiplier / 100);
-                  return (
-                    <div className="flex flex-col">
-                      <span>R: {rangeFormatted}</span>
-                      <span className="font-bold">WMA: {wmaFormatted}</span>
-                    </div>
-                  );
+                  
+                  if (displayType === 'wma') {
+                    return (
+                      <div className="flex flex-col">
+                        <span>R: {rangeFormatted}</span>
+                        <span className="font-bold">WMA: {wmaFormatted}</span>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div className="flex flex-col">
+                        <span className="font-bold">R: {rangeFormatted}</span>
+                        <span>WMA: {wmaFormatted}</span>
+                      </div>
+                    );
+                  }
                 })()}
               </td>
               {Array.from({ length: 15 }, (_, i) => 15 - i).map((windowSize) => {
