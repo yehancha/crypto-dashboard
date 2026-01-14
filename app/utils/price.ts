@@ -298,13 +298,13 @@ export function getHighlightedColumn(minutesRemaining: number, maxWindowSize: nu
 }
 
 /**
- * Calculates highlighting flags for symbols based on whether absolute deviation exceeds expected range
+ * Calculates highlighting flags for symbols based on whether absolute deviation exceeds WMA and max-range thresholds
  * @param prices Array of BinancePrice objects
- * @param displayType Display type: 'wma' or 'max-range'
+ * @param displayType Display type: 'wma' or 'max-range' (kept for backward compatibility, not used in calculation)
  * @param multiplier Multiplier percentage (e.g., 100 for 100%)
  * @param timeframe Timeframe type: '15m' or '1h'
  * @param highlightedColumn The highlighted column window size
- * @returns Record mapping symbol to boolean indicating if row should be highlighted
+ * @returns Record mapping symbol to 'yellow' | 'green' | null indicating highlight color
  */
 export function calculateHighlightingFlags(
   prices: Array<{ symbol: string; price: string; close15m?: string; close1h?: string; maxRanges?: MaxRange[] }>,
@@ -312,32 +312,31 @@ export function calculateHighlightingFlags(
   multiplier: number,
   timeframe: '15m' | '1h',
   highlightedColumn: number
-): Record<string, boolean> {
-  const flags: Record<string, boolean> = {};
+): Record<string, 'yellow' | 'green' | null> {
+  const flags: Record<string, 'yellow' | 'green' | null> = {};
   const multiplierRatio = multiplier / 100;
 
   for (const item of prices) {
     // Get the close price based on timeframe
     const closePrice = timeframe === '15m' ? item.close15m : item.close1h;
     if (!closePrice) {
-      flags[item.symbol] = false;
+      flags[item.symbol] = null;
       continue;
     }
 
     // Get the highlighted column's MaxRange
     const range = item.maxRanges?.find(r => r.windowSize === highlightedColumn);
     if (!range || range.range === 0) {
-      flags[item.symbol] = false;
+      flags[item.symbol] = null;
       continue;
     }
 
-    // Calculate expected range based on display type
-    const expectedRange = displayType === 'wma' 
-      ? (range.wma ?? 0) * multiplierRatio
-      : range.range * multiplierRatio;
+    // Calculate both thresholds independently
+    const wmaThreshold = (range.wma ?? 0) * multiplierRatio;
+    const maxRangeThreshold = range.range * multiplierRatio;
 
-    if (expectedRange === 0) {
-      flags[item.symbol] = false;
+    if (wmaThreshold === 0 && maxRangeThreshold === 0) {
+      flags[item.symbol] = null;
       continue;
     }
 
@@ -345,14 +344,20 @@ export function calculateHighlightingFlags(
     const currentPrice = parseFloat(item.price);
     const closePriceNum = parseFloat(closePrice);
     if (isNaN(currentPrice) || isNaN(closePriceNum)) {
-      flags[item.symbol] = false;
+      flags[item.symbol] = null;
       continue;
     }
 
     const absoluteDeviation = Math.abs(currentPrice - closePriceNum);
 
-    // Highlight if absolute deviation exceeds expected range
-    flags[item.symbol] = absoluteDeviation > expectedRange;
+    // Check max-range threshold first (green takes precedence)
+    if (maxRangeThreshold > 0 && absoluteDeviation > maxRangeThreshold) {
+      flags[item.symbol] = 'green';
+    } else if (wmaThreshold > 0 && absoluteDeviation > wmaThreshold) {
+      flags[item.symbol] = 'yellow';
+    } else {
+      flags[item.symbol] = null;
+    }
   }
 
   return flags;

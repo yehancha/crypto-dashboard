@@ -51,7 +51,7 @@ export default function PriceTable() {
   }, [prices, displayType, multiplier, timeframe, highlightedColumn]);
 
   // Track previous highlighting flags to detect new highlights
-  const previousHighlightingFlagsRef = useRef<Record<string, boolean>>({});
+  const previousHighlightingFlagsRef = useRef<Record<string, 'yellow' | 'green' | null>>({});
   const isInitialRenderRef = useRef<boolean>(true);
 
   // Use notifications hook
@@ -71,10 +71,10 @@ export default function PriceTable() {
 
     // Find symbols that transitioned from not highlighted to highlighted
     Object.keys(currentFlags).forEach((symbol) => {
-      const wasHighlighted = previousFlags[symbol] ?? false;
-      const isHighlighted = currentFlags[symbol] ?? false;
+      const wasHighlighted = previousFlags[symbol] !== null;
+      const isHighlighted = currentFlags[symbol] !== null;
 
-      // If symbol just became highlighted (transitioned from false to true)
+      // If symbol just became highlighted (transitioned from null to a color)
       if (!wasHighlighted && isHighlighted) {
         notify(`${symbol} ${timeframeConfig.label}`, {
           body: 'Deviation exceeds expected range',
@@ -84,7 +84,7 @@ export default function PriceTable() {
 
     // Update ref with current flags for next comparison
     previousHighlightingFlagsRef.current = { ...currentFlags };
-  }, [highlightingFlags, notify]);
+  }, [highlightingFlags, notify, timeframeConfig.label]);
 
   const handleAddSymbol = () => {
     const trimmedSymbol = newSymbol.trim().toUpperCase();
@@ -173,7 +173,7 @@ export default function PriceTable() {
                     onDrop={handleDrop}
                     onDragEnd={handleDragEnd}
                     onRemove={removeSymbol}
-                    isHighlighted={highlightingFlags[item.symbol] ?? false}
+                    highlightColor={highlightingFlags[item.symbol] ?? null}
                     highlightedColumn={highlightedColumn}
                     multiplier={multiplier}
                     displayType={displayType}

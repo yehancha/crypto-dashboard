@@ -15,7 +15,7 @@ interface MaxRangeTableProps {
   multiplier: number;
   onDisplayTypeChange: (value: DisplayType) => void;
   onMultiplierChange: (value: number) => void;
-  highlightingFlags?: Record<string, boolean>;
+  highlightingFlags?: Record<string, 'yellow' | 'green' | null>;
   showMore: boolean;
   onShowMoreChange: (value: boolean) => void;
 }
@@ -27,7 +27,7 @@ export default function MaxRangeTable({
   multiplier,
   onDisplayTypeChange,
   onMultiplierChange,
-  highlightingFlags = {},
+  highlightingFlags = {} as Record<string, 'yellow' | 'green' | null>,
   showMore,
   onShowMoreChange,
 }: MaxRangeTableProps) {
@@ -134,12 +134,14 @@ export default function MaxRangeTable({
         </thead>
         <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
           {prices.map((item) => {
-            const isHighlighted = highlightingFlags[item.symbol] ?? false;
+            const highlightColor = highlightingFlags[item.symbol] ?? null;
             return (
             <tr
               key={item.symbol}
               className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors ${
-                isHighlighted ? 'bg-amber-100 dark:bg-amber-950/50 border-l-4 border-l-amber-500 dark:border-l-amber-600' : ''
+                highlightColor === 'yellow' ? 'bg-amber-100 dark:bg-amber-950/50 border-l-4 border-l-amber-500 dark:border-l-amber-600' : ''
+              } ${
+                highlightColor === 'green' ? 'bg-green-100 dark:bg-green-950/50 border-l-4 border-l-green-500 dark:border-l-green-600' : ''
               }`}
             >
               <td className="px-6 py-4 text-sm font-medium text-zinc-900 dark:text-zinc-50">

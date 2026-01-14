@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { getPrices, getCandleCloses, get1mCandlesBatch, type BinancePrice, type Candle, BinanceRateLimitError } from '../lib/binance';
+import { getPrices, getCandleCloses, get1mCandlesBatch, get1mCandles, type BinancePrice, type Candle, BinanceRateLimitError } from '../lib/binance';
 import { calculateMaxRanges } from '../utils/price';
 import { type TimeframeType, getTimeframeConfig } from '../lib/timeframe';
 import { useLocalStorage } from './useLocalStorage';
@@ -198,8 +198,78 @@ export function useCryptoPrices(
     }
 
     try {
-      // Use timeframe config to determine candle limit (60 for 15m, 600 for 1h)
-      const candlesData = await get1mCandlesBatch(currentSymbols, timeframeConfig.candleLimit);
+      const candlesData: Record<string, Candle[]> = {};
+      const symbolsNeedingFullFetch: string[] = [];
+      const symbolsNeedingIncrementalFetch: Array<{ symbol: string; missingCount: number }> = [];
+
+      // Calculate the latest completed candle's openTime (current time rounded down to the minute)
+      const now = Date.now();
+      const latestCompletedCandleOpenTime = Math.floor(now / 60000) * 60000;
+
+      // Determine which symbols need full fetch vs incremental fetch
+      for (const symbol of currentSymbols) {
+        const existingCandles = candles1mRef.current.get(symbol);
+        
+        if (!existingCandles || existingCandles.length === 0) {
+          // No existing candles - need full fetch
+          symbolsNeedingFullFetch.push(symbol);
+        } else {
+          // Calculate missing candles
+          const lastCandleOpenTime = existingCandles[existingCandles.length - 1].openTime;
+          const minutesMissing = Math.floor((latestCompletedCandleOpenTime - lastCandleOpenTime) / 60000);
+          
+          if (minutesMissing <= 0) {
+            // No missing candles - skip this symbol
+            continue;
+          }
+          
+          // Cap missing count at the candle limit
+          const missingCount = Math.min(minutesMissing, timeframeConfig.candleLimit);
+          symbolsNeedingIncrementalFetch.push({ symbol, missingCount });
+        }
+      }
+
+      // Fetch all candles for symbols that need full fetch
+      // Fetch limit+1 candles and skip the last one (incomplete candle)
+      if (symbolsNeedingFullFetch.length > 0) {
+        const fullFetchData = await get1mCandlesBatch(symbolsNeedingFullFetch, timeframeConfig.candleLimit + 1);
+        // Skip the last candle (incomplete) from each symbol's results
+        Object.entries(fullFetchData).forEach(([symbol, candles]) => {
+          if (candles && candles.length > 0) {
+            candlesData[symbol] = candles.slice(0, -1); // Remove last incomplete candle
+          }
+        });
+      }
+
+      // Fetch missing candles for symbols that need incremental fetch
+      // Fetch missingCount+1 candles and skip the last one (incomplete candle)
+      for (const { symbol, missingCount } of symbolsNeedingIncrementalFetch) {
+        try {
+          const existingCandles = candles1mRef.current.get(symbol)!;
+          // Fetch missingCount+1 candles, then skip the last incomplete one
+          const fetchedCandles = await get1mCandles(symbol, missingCount + 1);
+          const newCandles = fetchedCandles.slice(0, -1); // Remove last incomplete candle
+          
+          // Merge new candles with existing ones, avoiding duplicates
+          const existingOpenTimes = new Set(existingCandles.map(c => c.openTime));
+          const uniqueNewCandles = newCandles.filter(c => !existingOpenTimes.has(c.openTime));
+          
+          // Combine existing and new candles, maintaining chronological order
+          const mergedCandles = [...existingCandles, ...uniqueNewCandles].sort((a, b) => a.openTime - b.openTime);
+          
+          // Remove oldest candles if we exceed the limit
+          if (mergedCandles.length > timeframeConfig.candleLimit) {
+            candlesData[symbol] = mergedCandles.slice(-timeframeConfig.candleLimit);
+          } else {
+            candlesData[symbol] = mergedCandles;
+          }
+        } catch (err) {
+          // Log error but don't fail entire batch
+          console.error(`Error fetching incremental 1m candles for ${symbol}:`, err);
+          // Keep existing candles if fetch fails
+          candlesData[symbol] = candles1mRef.current.get(symbol) || [];
+        }
+      }
       
       // Update candles ref
       Object.entries(candlesData).forEach(([symbol, candles]) => {
