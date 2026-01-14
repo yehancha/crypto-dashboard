@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useCryptoPrices } from '../hooks/useCryptoPrices';
+import { useNotifications } from '../hooks/useNotifications';
 import { type TimeframeType, getTimeframeConfig } from '../lib/timeframe';
 import { calculateHighlightingFlags, getMinutesUntilNextInterval, getHighlightedColumn } from '../utils/price';
 import SymbolInput from './PriceTable/SymbolInput';
@@ -46,6 +47,42 @@ export default function PriceTable() {
   const highlightingFlags = useMemo(() => {
     return calculateHighlightingFlags(prices, displayType, multiplier, timeframe, highlightedColumn);
   }, [prices, displayType, multiplier, timeframe, highlightedColumn]);
+
+  // Track previous highlighting flags to detect new highlights
+  const previousHighlightingFlagsRef = useRef<Record<string, boolean>>({});
+  const isInitialRenderRef = useRef<boolean>(true);
+
+  // Use notifications hook
+  const { notify } = useNotifications();
+
+  // Detect new highlights and trigger notifications
+  useEffect(() => {
+    // Skip notifications on initial render
+    if (isInitialRenderRef.current) {
+      isInitialRenderRef.current = false;
+      previousHighlightingFlagsRef.current = { ...highlightingFlags };
+      return;
+    }
+
+    const previousFlags = previousHighlightingFlagsRef.current;
+    const currentFlags = highlightingFlags;
+
+    // Find symbols that transitioned from not highlighted to highlighted
+    Object.keys(currentFlags).forEach((symbol) => {
+      const wasHighlighted = previousFlags[symbol] ?? false;
+      const isHighlighted = currentFlags[symbol] ?? false;
+
+      // If symbol just became highlighted (transitioned from false to true)
+      if (!wasHighlighted && isHighlighted) {
+        notify(`${symbol} ${timeframeConfig.label}`, {
+          body: 'Deviation exceeds expected range',
+        });
+      }
+    });
+
+    // Update ref with current flags for next comparison
+    previousHighlightingFlagsRef.current = { ...currentFlags };
+  }, [highlightingFlags, notify]);
 
   const handleAddSymbol = () => {
     const trimmedSymbol = newSymbol.trim().toUpperCase();
