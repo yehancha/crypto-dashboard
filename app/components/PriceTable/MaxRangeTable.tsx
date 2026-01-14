@@ -16,8 +16,8 @@ type DisplayType = 'wma' | 'max-range';
 export default function MaxRangeTable({ prices, timeframe }: MaxRangeTableProps) {
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [multiplier, setMultiplier] = useState<number>(100);
-  const [displayType, setDisplayType] = useState<DisplayType>('wma');
-  const [showMore, setShowMore] = useState<boolean>(true);
+  const [displayType, setDisplayType] = useState<DisplayType>('max-range');
+  const [showMore, setShowMore] = useState<boolean>(false);
   
   const timeframeConfig = getTimeframeConfig(timeframe);
 
