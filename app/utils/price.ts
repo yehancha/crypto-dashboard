@@ -247,20 +247,20 @@ export function getMinutesUntilNextInterval(intervalMinutes: number): number {
   if (intervalMinutes === 60) {
     // For hourly intervals, calculate minutes until next hour
     const nextHour = new Date(now);
-    nextHour.setHours(nextHour.getHours() + 1);
-    nextHour.setMinutes(0, 0, 0);
+    nextHour.setUTCHours(nextHour.getUTCHours() + 1);
+    nextHour.setUTCMinutes(0, 0, 0);
     return (nextHour.getTime() - now.getTime()) / (1000 * 60);
   } else {
     // For other intervals (e.g., 15 minutes)
-    const currentMinute = now.getMinutes();
+    const currentMinute = now.getUTCMinutes();
     const nextIntervalMinute = Math.ceil(currentMinute / intervalMinutes) * intervalMinutes;
     const nextInterval = new Date(now);
-    nextInterval.setMinutes(nextIntervalMinute, 0, 0);
+    nextInterval.setUTCMinutes(nextIntervalMinute, 0, 0);
     
     // If we've already passed the calculated interval (shouldn't happen, but handle edge case)
     if (nextInterval <= now) {
-      nextInterval.setHours(nextInterval.getHours() + 1);
-      nextInterval.setMinutes(0);
+      nextInterval.setUTCHours(nextInterval.getUTCHours() + 1);
+      nextInterval.setUTCMinutes(0);
     }
     
     return (nextInterval.getTime() - now.getTime()) / (1000 * 60);
