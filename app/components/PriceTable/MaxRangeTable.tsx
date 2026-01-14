@@ -17,6 +17,7 @@ export default function MaxRangeTable({ prices, timeframe }: MaxRangeTableProps)
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [multiplier, setMultiplier] = useState<number>(100);
   const [displayType, setDisplayType] = useState<DisplayType>('wma');
+  const [showMore, setShowMore] = useState<boolean>(true);
   
   const timeframeConfig = getTimeframeConfig(timeframe);
 
@@ -47,6 +48,12 @@ export default function MaxRangeTable({ prices, timeframe }: MaxRangeTableProps)
           Max Range Analysis
         </h2>
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => setShowMore(!showMore)}
+            className="px-3 py-1.5 text-sm rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 hover:bg-zinc-50 dark:hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+          >
+            {showMore ? 'Show Less' : 'Show More'}
+          </button>
           <div className="flex items-center gap-2">
             <label htmlFor="display-type-select" className="text-sm text-zinc-600 dark:text-zinc-400">
               Display:
@@ -162,7 +169,7 @@ export default function MaxRangeTable({ prices, timeframe }: MaxRangeTableProps)
                     }`}
                     title={range ? `${windowSize} minute max range` : 'Insufficient data'}
                   >
-                    {range ? formatRangeDisplay(range, item.price) : '—'}
+                    {range ? formatRangeDisplay(range, item.price, showMore) : '—'}
                   </td>
                 );
               })}

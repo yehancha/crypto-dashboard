@@ -174,19 +174,25 @@ export function calculateMaxRanges(candles: Candle[], maxWindowSize: number = 15
  * Formats a range display showing high, low, range, and WMA
  * @param range MaxRange object to format
  * @param basePrice Optional base price for percentage calculation
- * @returns Formatted string like "H: 50000.00, L: 49000.00 (R: 1000.00, WMA: 950.00)"
+ * @param showHighLow Whether to show high and low values (default: true)
+ * @returns Formatted string like "H: 50000.00, L: 49000.00 (R: 1000.00, WMA: 950.00)" or "(R: 1000.00, WMA: 950.00)" if showHighLow is false
  */
-export function formatRangeDisplay(range: MaxRange, basePrice?: string): string {
+export function formatRangeDisplay(range: MaxRange, basePrice?: string, showHighLow: boolean = true): string {
   if (!range.high || !range.low || range.range === 0) {
     return '—';
   }
 
-  const highFormatted = formatPrice(range.high);
-  const lowFormatted = formatPrice(range.low);
   const rangeFormatted = formatPrice(range.range.toString());
   const wmaFormatted = formatWMA(range.wma);
 
-  let result = `H: ${highFormatted}, L: ${lowFormatted} (R: ${rangeFormatted}, WMA: ${wmaFormatted})`;
+  let result: string;
+  if (showHighLow) {
+    const highFormatted = formatPrice(range.high);
+    const lowFormatted = formatPrice(range.low);
+    result = `H: ${highFormatted}, L: ${lowFormatted} (R: ${rangeFormatted}, WMA: ${wmaFormatted})`;
+  } else {
+    result = `R: ${rangeFormatted}, WMA: ${wmaFormatted}`;
+  }
 
   // Add percentage if base price is provided
   if (basePrice) {
