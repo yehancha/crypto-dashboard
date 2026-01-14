@@ -83,17 +83,19 @@ export async function getPrices(symbols: string[]): Promise<BinancePrice[]> {
 }
 
 /**
- * Generic function to fetch the last candle close price for a symbol from Binance API
+ * Generic function to fetch the previous completed candle close price for a symbol from Binance API
  * @param symbol Trading pair symbol (e.g., 'BTCUSDT')
  * @param interval Candle interval (e.g., '15m', '1h')
- * @returns Promise with the close price of the last candle
+ * @returns Promise with the close price of the previous completed candle
  * @throws BinanceRateLimitError if rate limited (429) or IP banned (418)
  * 
  * Weight: 2 per request
  */
 export async function getCandleClose(symbol: string, interval: string): Promise<string> {
   try {
-    const url = `${BINANCE_API_BASE}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=1`;
+    // Fetch 2 candles: the previous completed one (index 0) and the current incomplete one (index 1)
+    // We use the previous completed candle's close price
+    const url = `${BINANCE_API_BASE}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=2`;
     
     const response = await fetch(url, {
       next: { revalidate: 0 }, // Always fetch fresh data
@@ -119,10 +121,12 @@ export async function getCandleClose(symbol: string, interval: string): Promise<
     
     // Kline response format: [Open time, Open, High, Low, Close, Volume, ...]
     // Close price is at index 4
+    // data[0] = previous completed candle, data[1] = current incomplete candle
     if (data.length === 0 || !data[0] || data[0].length < 5) {
       throw new Error(`Invalid kline data for ${symbol}`);
     }
     
+    // Return the close price of the previous completed candle (first element)
     return data[0][4] as string;
   } catch (error) {
     // Re-throw rate limit errors as-is
@@ -136,9 +140,9 @@ export async function getCandleClose(symbol: string, interval: string): Promise<
 }
 
 /**
- * Fetches the last 15-minute candle close price for a symbol from Binance API
+ * Fetches the previous completed 15-minute candle close price for a symbol from Binance API
  * @param symbol Trading pair symbol (e.g., 'BTCUSDT')
- * @returns Promise with the close price of the last 15m candle
+ * @returns Promise with the close price of the previous completed 15m candle
  * @throws BinanceRateLimitError if rate limited (429) or IP banned (418)
  * 
  * Weight: 2 per request
