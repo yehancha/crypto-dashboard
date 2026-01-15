@@ -90,53 +90,114 @@ export function formatDeviationWithAbsolute(
   return `${absSign}${absFormatted} (${pctFormatted})`;
 }
 
-import type { Candle, MaxRange } from '../lib/binance';
+import type { Candle, MaxRange, WindowRangeCache, CachedWindowRange } from '../lib/binance';
 
 /**
- * Calculates the maximum range for a specific window size
+ * Generates a cache key for a window range calculation
+ * @param windowSize Size of the window
+ * @param firstCandleOpenTime Open time of the first candle in the window
+ * @returns Cache key string
+ */
+export function getWindowRangeCacheKey(windowSize: number, firstCandleOpenTime: number): string {
+  return `${windowSize}-${firstCandleOpenTime}`;
+}
+
+/**
+ * Prunes stale entries from the window range cache
+ * Removes entries for candles that are no longer in the candle array
+ * @param cache The cache to prune
+ * @param candles Current candle array
+ */
+export function pruneWindowRangeCache(cache: WindowRangeCache, candles: Candle[]): void {
+  if (candles.length === 0) {
+    cache.clear();
+    return;
+  }
+  
+  // Get valid openTimes from current candles
+  const validOpenTimes = new Set(candles.map(c => c.openTime));
+  
+  // Remove entries whose firstCandleOpenTime is no longer valid
+  for (const key of cache.keys()) {
+    const openTime = parseInt(key.split('-')[1], 10);
+    if (!validOpenTimes.has(openTime)) {
+      cache.delete(key);
+    }
+  }
+}
+
+/**
+ * Calculates high, low, and range for a single window of candles
+ * @param candles Array of candles in the window
+ * @returns CachedWindowRange with high, low, and range
+ */
+function calculateWindowRange(candles: Candle[]): CachedWindowRange {
+  const highs = candles.map(c => parseFloat(c.high));
+  const lows = candles.map(c => parseFloat(c.low));
+  
+  const high = Math.max(...highs);
+  const low = Math.min(...lows);
+  const range = high - low;
+  
+  return { high, low, range };
+}
+
+/**
+ * Calculates the maximum range for a specific window size, using cache when available
  * @param candles Array of candle data
  * @param windowSize Number of consecutive candles to analyze
+ * @param cache Optional cache to store/retrieve window range calculations
  * @returns MaxRange object with the maximum range found, or null if insufficient candles
  */
 export function calculateMaxRangeForWindow(
   candles: Candle[],
-  windowSize: number
+  windowSize: number,
+  cache?: WindowRangeCache
 ): MaxRange | null {
   if (candles.length < windowSize) {
     return null;
   }
 
   let maxRange = 0;
-  let maxHigh = '';
-  let maxLow = '';
+  let maxHigh = 0;
+  let maxLow = 0;
+  let maxHighStr = '';
+  let maxLowStr = '';
   let weightedSum = 0;
   let weightSum = 0;
 
   // Slide window through candle array
   for (let i = 0; i <= candles.length - windowSize; i++) {
-    const window = candles.slice(i, i + windowSize);
+    const windowCandles = candles.slice(i, i + windowSize);
+    const firstCandleOpenTime = windowCandles[0].openTime;
+    const cacheKey = getWindowRangeCacheKey(windowSize, firstCandleOpenTime);
     
-    // Find max high and min low in this window
-    const highs = window.map(c => parseFloat(c.high));
-    const lows = window.map(c => parseFloat(c.low));
+    let windowRange: CachedWindowRange;
     
-    const windowHigh = Math.max(...highs);
-    const windowLow = Math.min(...lows);
-    const range = windowHigh - windowLow;
+    // Check cache first
+    if (cache?.has(cacheKey)) {
+      windowRange = cache.get(cacheKey)!;
+    } else {
+      // Calculate and cache
+      windowRange = calculateWindowRange(windowCandles);
+      cache?.set(cacheKey, windowRange);
+    }
 
     // Track the window with maximum range
-    if (range > maxRange) {
-      maxRange = range;
+    if (windowRange.range > maxRange) {
+      maxRange = windowRange.range;
+      maxHigh = windowRange.high;
+      maxLow = windowRange.low;
       // Find the actual high and low strings from the candles
-      const highCandle = window.find(c => parseFloat(c.high) === windowHigh);
-      const lowCandle = window.find(c => parseFloat(c.low) === windowLow);
-      maxHigh = highCandle?.high || windowHigh.toString();
-      maxLow = lowCandle?.low || windowLow.toString();
+      const highCandle = windowCandles.find(c => parseFloat(c.high) === maxHigh);
+      const lowCandle = windowCandles.find(c => parseFloat(c.low) === maxLow);
+      maxHighStr = highCandle?.high || maxHigh.toString();
+      maxLowStr = lowCandle?.low || maxLow.toString();
     }
 
     // Calculate WMA: weight = i + 1 (oldest = 1, next = 2, etc.)
     const weight = i + 1;
-    weightedSum += range * weight;
+    weightedSum += windowRange.range * weight;
     weightSum += weight;
   }
 
@@ -146,8 +207,8 @@ export function calculateMaxRangeForWindow(
   return {
     windowSize,
     range: maxRange,
-    high: maxHigh,
-    low: maxLow,
+    high: maxHighStr,
+    low: maxLowStr,
     wma,
   };
 }
@@ -156,14 +217,15 @@ export function calculateMaxRangeForWindow(
  * Calculates maximum ranges for all window sizes from maxWindowSize down to 1
  * @param candles Array of candle data (should have at least maxWindowSize candles for full analysis)
  * @param maxWindowSize Maximum window size to calculate (default: 15 for backward compatibility)
+ * @param cache Optional cache to store/retrieve window range calculations
  * @returns Array of MaxRange objects, one for each window size (maxWindowSize, maxWindowSize-1, ..., 1)
  */
-export function calculateMaxRanges(candles: Candle[], maxWindowSize: number = 15): MaxRange[] {
+export function calculateMaxRanges(candles: Candle[], maxWindowSize: number = 15, cache?: WindowRangeCache): MaxRange[] {
   const ranges: MaxRange[] = [];
   
   // Calculate for window sizes from maxWindowSize down to 1
   for (let windowSize = maxWindowSize; windowSize >= 1; windowSize--) {
-    const range = calculateMaxRangeForWindow(candles, windowSize);
+    const range = calculateMaxRangeForWindow(candles, windowSize, cache);
     if (range) {
       ranges.push(range);
     } else {

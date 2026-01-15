@@ -15,6 +15,16 @@ export interface MaxRange {
   wma?: number; // Weighted Moving Average
 }
 
+// Cache entry for a single window's range calculation
+export interface CachedWindowRange {
+  high: number;
+  low: number;
+  range: number;
+}
+
+// Cache for window range calculations, keyed by "<windowSize>-<firstCandleOpenTime>"
+export type WindowRangeCache = Map<string, CachedWindowRange>;
+
 export interface BinancePrice {
   symbol: string;
   price: string;

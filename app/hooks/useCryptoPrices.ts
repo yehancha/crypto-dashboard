@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
-import { getPrices, getCandleCloses, get1mCandlesBatch, get1mCandles, type BinancePrice, type Candle, BinanceRateLimitError } from '../lib/binance';
-import { calculateMaxRanges } from '../utils/price';
+import { getPrices, getCandleCloses, get1mCandlesBatch, get1mCandles, type BinancePrice, type Candle, type WindowRangeCache, BinanceRateLimitError } from '../lib/binance';
+import { calculateMaxRanges, pruneWindowRangeCache } from '../utils/price';
 import { type TimeframeType, getTimeframeConfig } from '../lib/timeframe';
 import { useLocalStorage } from './useLocalStorage';
 
@@ -44,6 +44,15 @@ export function useCryptoPrices(
   const currentIntervalRef = useRef<number>(POLL_INTERVAL);
   const symbolsRef = useRef<string[]>(symbols);
   const candles1mRef = useRef<Map<string, Candle[]>>(new Map());
+  const windowRangeCacheRef = useRef<Map<string, WindowRangeCache>>(new Map());
+
+  const getMaxRangesWithCache = (symbol: string, candles: Candle[] | undefined) => {
+    if (!candles) return undefined;
+    const cache = windowRangeCacheRef.current.get(symbol) || new Map();
+    const maxRanges = calculateMaxRanges(candles, timeframeConfig.maxWindowSize, cache);
+    windowRangeCacheRef.current.set(symbol, cache);
+    return maxRanges;
+  };
 
   const setupPolling = (interval: number) => {
     if (intervalRef.current) {
@@ -89,7 +98,7 @@ export function useCryptoPrices(
           const newPrice = data.find(item => item.symbol === symbol) || { symbol, price: '0' };
           const prevPrice = prevPriceMap.get(symbol);
           const candles = candles1mRef.current.get(symbol);
-          const maxRanges = candles ? calculateMaxRanges(candles, timeframeConfig.maxWindowSize) : undefined;
+          const maxRanges = getMaxRangesWithCache(symbol, candles);
           
           const updatedPrice: BinancePrice = {
             ...newPrice,
@@ -164,7 +173,7 @@ export function useCryptoPrices(
       setPrices((prevPrices) =>
         prevPrices.map((price) => {
           const prevCandles = candles1mRef.current.get(price.symbol);
-          const prevRanges = prevCandles ? calculateMaxRanges(prevCandles, timeframeConfig.maxWindowSize) : undefined;
+          const prevRanges = getMaxRangesWithCache(price.symbol, prevCandles);
           
           const updatedPrice: BinancePrice = {
             ...price,
@@ -271,10 +280,15 @@ export function useCryptoPrices(
         }
       }
       
-      // Update candles ref
+      // Update candles ref and prune stale cache entries
       Object.entries(candlesData).forEach(([symbol, candles]) => {
         if (candles && candles.length > 0) {
           candles1mRef.current.set(symbol, candles);
+          // Prune stale cache entries for this symbol
+          const cache = windowRangeCacheRef.current.get(symbol);
+          if (cache) {
+            pruneWindowRangeCache(cache, candles);
+          }
         }
       });
 
@@ -282,7 +296,7 @@ export function useCryptoPrices(
       setPrices((prevPrices) =>
         prevPrices.map((price) => {
           const candles = candles1mRef.current.get(price.symbol);
-          const maxRanges = candles ? calculateMaxRanges(candles, timeframeConfig.maxWindowSize) : undefined;
+          const maxRanges = getMaxRangesWithCache(price.symbol, candles);
           return {
             ...price,
             candles1m: candles,
@@ -310,8 +324,9 @@ export function useCryptoPrices(
     const newSymbols = symbols.filter(s => s !== symbolToRemove);
     setSymbols(newSymbols);
     symbolsRef.current = newSymbols;
-    // Clean up candles for removed symbol
+    // Clean up candles and cache for removed symbol
     candles1mRef.current.delete(symbolToRemove);
+    windowRangeCacheRef.current.delete(symbolToRemove);
   };
 
   const reorderSymbols = (fromIndex: number, toIndex: number) => {
