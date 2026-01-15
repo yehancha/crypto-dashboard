@@ -32,6 +32,9 @@ export default function PriceTableHeader({ timeframe, highlightedColumn }: Price
         <th className="px-6 py-4 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
           Deviation
         </th>
+        <th className="px-2 py-4 text-center text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          Safety Rating
+        </th>
         <th className="px-6 py-4 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
           Threshold {highlightedColumn}m
         </th>
