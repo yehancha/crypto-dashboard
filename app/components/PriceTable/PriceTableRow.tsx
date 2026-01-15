@@ -129,6 +129,51 @@ export default function PriceTableRow({
           );
         })()}
       </td>
+      <td className="px-2 py-4 text-center">
+        {(() => {
+          const closePrice = timeframe === '15m' ? item.close15m : item.close1h;
+          const range = item.maxRanges?.find(r => r.windowSize === highlightedColumn);
+          const absoluteDeviation = calculateAbsoluteDeviation(item.price, closePrice);
+          const absDeviation = absoluteDeviation !== null ? Math.abs(absoluteDeviation) : 0;
+          
+          const multiplierRatio = multiplier / 100;
+          const wmaThreshold = (range?.wma ?? 0) * multiplierRatio;
+          const maxRangeThreshold = (range?.range ?? 0) * multiplierRatio;
+          
+          // Calculate how many dots to color based on WMA (yellow) and max-range (green)
+          const getFilledDots = (deviation: number, threshold: number): number => {
+            if (threshold === 0) return 0;
+            const ratio = deviation / threshold;
+            if (ratio > 1) return 4;
+            if (ratio > 0.75) return 3;
+            if (ratio > 0.5) return 2;
+            if (ratio > 0.25) return 1;
+            return 0;
+          };
+          
+          const yellowDots = getFilledDots(absDeviation, wmaThreshold);
+          const greenDots = getFilledDots(absDeviation, maxRangeThreshold);
+          
+          return (
+            <div className="flex gap-1 justify-center">
+              {[0, 1, 2, 3].map((i) => {
+                let color = 'bg-zinc-300 dark:bg-zinc-600'; // grey default
+                if (i < greenDots) {
+                  color = 'bg-green-500 dark:bg-green-400';
+                } else if (i < yellowDots) {
+                  color = 'bg-amber-400 dark:bg-amber-500';
+                }
+                return (
+                  <span
+                    key={i}
+                    className={`w-2 h-2 rounded-full ${color}`}
+                  />
+                );
+              })}
+            </div>
+          );
+        })()}
+      </td>
       <td className="px-6 py-4 text-right text-sm text-zinc-600 dark:text-zinc-400">
         {(() => {
           const closePrice = timeframe === '15m' ? item.close15m : item.close1h;

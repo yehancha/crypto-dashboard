@@ -70,19 +70,16 @@ export default function PriceTable() {
     const previousFlags = previousHighlightingFlagsRef.current;
     const currentFlags = highlightingFlags;
 
-    // Find symbols that transitioned to highlighted or escalated from yellow to green
+    // Find symbols that transitioned to a new/higher highlight state
     Object.keys(currentFlags).forEach((symbol) => {
-      const previousColor = previousFlags[symbol] ?? null;
-      const currentColor = currentFlags[symbol] ?? null;
+      const previousColor = previousFlags[symbol];
+      const currentColor = currentFlags[symbol];
 
-      // Trigger notification if:
-      // 1. Transitioned from null to any color (new highlight)
-      // 2. Transitioned from yellow to green (escalation)
-      const shouldNotify = 
-        (previousColor === null && currentColor !== null) || // null → yellow/green
-        (previousColor === 'yellow' && currentColor === 'green'); // yellow → green
+      // Notify if: null -> yellow/green, or yellow -> green
+      const isNewHighlight = previousColor === null && currentColor !== null;
+      const isUpgrade = previousColor === 'yellow' && currentColor === 'green';
 
-      if (shouldNotify) {
+      if (isNewHighlight || isUpgrade) {
         // 1 beep for yellow (WMA threshold), 3 beeps for green (max-range threshold)
         const beepCount = currentColor === 'green' ? 3 : 1;
         notify(`${symbol} ${timeframeConfig.label}`, {
