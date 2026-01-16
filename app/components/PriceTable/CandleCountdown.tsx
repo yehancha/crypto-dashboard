@@ -61,15 +61,9 @@ export default function CandleCountdown({ timeframe }: CandleCountdownProps) {
     // Set initial time
     setTimeRemaining(calculateTimeRemaining());
 
-    // Decrement every second
+    // Recalculate every second to prevent drift
     const interval = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 0) {
-          // When it reaches 0, recalculate to get the next interval
-          return calculateTimeRemaining();
-        }
-        return prev - 1;
-      });
+      setTimeRemaining(calculateTimeRemaining());
     }, 1000);
 
     return () => clearInterval(interval);
