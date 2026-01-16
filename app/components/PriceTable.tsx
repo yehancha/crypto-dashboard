@@ -25,6 +25,7 @@ export default function PriceTable() {
   const [timeframe, setTimeframe] = useLocalStorage<TimeframeType>('crypto-dashboard-timeframe', '15m');
   const [displayType, setDisplayType] = useLocalStorage<DisplayType>('crypto-dashboard-display-type', 'max-range');
   const [multiplier, setMultiplier] = useLocalStorage<number>('crypto-dashboard-multiplier', 100);
+  const [historyHours, setHistoryHours] = useLocalStorage<number>('crypto-dashboard-history-hours', 12);
   const [showMore, setShowMore] = useLocalStorage<boolean>('crypto-dashboard-show-more', false);
   
   const {
@@ -36,7 +37,7 @@ export default function PriceTable() {
     addSymbol,
     removeSymbol,
     reorderSymbols,
-  } = useCryptoPrices({ initialSymbols: INITIAL_SYMBOLS, timeframe });
+  } = useCryptoPrices({ initialSymbols: INITIAL_SYMBOLS, timeframe, historyHours });
 
   const [newSymbol, setNewSymbol] = useState('');
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -198,8 +199,10 @@ export default function PriceTable() {
           timeframe={timeframe}
           displayType={displayType}
           multiplier={multiplier}
+          historyHours={historyHours}
           onDisplayTypeChange={setDisplayType}
           onMultiplierChange={setMultiplier}
+          onHistoryHoursChange={setHistoryHours}
           highlightingFlags={highlightingFlags}
           showMore={showMore}
           onShowMoreChange={setShowMore}

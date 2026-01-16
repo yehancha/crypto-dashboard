@@ -13,8 +13,10 @@ interface MaxRangeTableProps {
   timeframe: TimeframeType;
   displayType: DisplayType;
   multiplier: number;
+  historyHours: number;
   onDisplayTypeChange: (value: DisplayType) => void;
   onMultiplierChange: (value: number) => void;
+  onHistoryHoursChange: (value: number) => void;
   highlightingFlags?: Record<string, 'yellow' | 'green' | null>;
   showMore: boolean;
   onShowMoreChange: (value: boolean) => void;
@@ -25,8 +27,10 @@ export default function MaxRangeTable({
   timeframe,
   displayType,
   multiplier,
+  historyHours,
   onDisplayTypeChange,
   onMultiplierChange,
+  onHistoryHoursChange,
   highlightingFlags = {} as Record<string, 'yellow' | 'green' | null>,
   showMore,
   onShowMoreChange,
@@ -50,6 +54,9 @@ export default function MaxRangeTable({
 
   // Generate multiplier options from 10% to 200% in 10% increments
   const multiplierOptions = Array.from({ length: 20 }, (_, i) => (i + 1) * 10);
+  
+  // Generate history hours options from 1h to 16h
+  const historyHoursOptions = Array.from({ length: 16 }, (_, i) => i + 1);
 
   if (prices.length === 0) {
     return null;
@@ -80,6 +87,23 @@ export default function MaxRangeTable({
             >
               <option value="wma">WMA</option>
               <option value="max-range">Max Range</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="history-hours-select" className="text-sm text-zinc-600 dark:text-zinc-400">
+              History:
+            </label>
+            <select
+              id="history-hours-select"
+              value={historyHours}
+              onChange={(e) => onHistoryHoursChange(Number(e.target.value))}
+              className="px-3 py-1.5 text-sm rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {historyHoursOptions.map((value) => (
+                <option key={value} value={value}>
+                  {value}h
+                </option>
+              ))}
             </select>
           </div>
           <div className="flex items-center gap-2">

@@ -12,6 +12,7 @@ const MAX_BACKOFF_INTERVAL = 60000; // Maximum 60 seconds between retries
 export interface UseCryptoPricesOptions {
   initialSymbols?: string[];
   timeframe?: TimeframeType;
+  historyHours?: number;
 }
 
 export interface UseCryptoPricesReturn {
@@ -28,8 +29,10 @@ export interface UseCryptoPricesReturn {
 export function useCryptoPrices(
   options: UseCryptoPricesOptions = {}
 ): UseCryptoPricesReturn {
-  const { initialSymbols = [], timeframe = '15m' } = options;
+  const { initialSymbols = [], timeframe = '15m', historyHours = 12 } = options;
   const timeframeConfig = getTimeframeConfig(timeframe);
+  // Calculate candle limit based on history hours (convert hours to minutes)
+  const candleLimit = historyHours * 60;
   
   const [symbols, setSymbols] = useLocalStorage<string[]>('crypto-dashboard-symbols', initialSymbols);
   const [prices, setPrices] = useState<BinancePrice[]>([]);
@@ -222,6 +225,9 @@ export function useCryptoPrices(
         if (!existingCandles || existingCandles.length === 0) {
           // No existing candles - need full fetch
           symbolsNeedingFullFetch.push(symbol);
+        } else if (existingCandles.length < candleLimit) {
+          // Not enough historical candles - need full fetch to get required amount
+          symbolsNeedingFullFetch.push(symbol);
         } else {
           // Calculate missing candles
           const lastCandleOpenTime = existingCandles[existingCandles.length - 1].openTime;
@@ -233,7 +239,7 @@ export function useCryptoPrices(
           }
           
           // Cap missing count at the candle limit
-          const missingCount = Math.min(minutesMissing, timeframeConfig.candleLimit);
+          const missingCount = Math.min(minutesMissing, candleLimit);
           symbolsNeedingIncrementalFetch.push({ symbol, missingCount });
         }
       }
@@ -241,7 +247,7 @@ export function useCryptoPrices(
       // Fetch all candles for symbols that need full fetch
       // Fetch limit+1 candles and skip the last one (incomplete candle)
       if (symbolsNeedingFullFetch.length > 0) {
-        const fullFetchData = await get1mCandlesBatch(symbolsNeedingFullFetch, timeframeConfig.candleLimit + 1);
+        const fullFetchData = await get1mCandlesBatch(symbolsNeedingFullFetch, candleLimit + 1);
         // Skip the last candle (incomplete) from each symbol's results
         Object.entries(fullFetchData).forEach(([symbol, candles]) => {
           if (candles && candles.length > 0) {
@@ -267,8 +273,8 @@ export function useCryptoPrices(
           const mergedCandles = [...existingCandles, ...uniqueNewCandles].sort((a, b) => a.openTime - b.openTime);
           
           // Remove oldest candles if we exceed the limit
-          if (mergedCandles.length > timeframeConfig.candleLimit) {
-            candlesData[symbol] = mergedCandles.slice(-timeframeConfig.candleLimit);
+          if (mergedCandles.length > candleLimit) {
+            candlesData[symbol] = mergedCandles.slice(-candleLimit);
           } else {
             candlesData[symbol] = mergedCandles;
           }
@@ -373,7 +379,7 @@ export function useCryptoPrices(
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbols, timeframe]);
+  }, [symbols, timeframe, historyHours]);
 
   return {
     symbols,
