@@ -424,3 +424,75 @@ export function calculateHighlightingFlags(
 
   return flags;
 }
+
+/**
+ * Calculates the number of filled dots (0-4) based on deviation to threshold ratio
+ * @param deviation Absolute deviation value
+ * @param threshold Threshold value to compare against
+ * @returns Number of dots (0-4) based on ratio thresholds
+ */
+export function getFilledDots(deviation: number, threshold: number): number {
+  if (threshold === 0) return 0;
+  const ratio = deviation / threshold;
+  if (ratio > 1) return 4;
+  if (ratio > 0.75) return 3;
+  if (ratio > 0.5) return 2;
+  if (ratio > 0.25) return 1;
+  return 0;
+}
+
+/**
+ * Calculates yellow and green dot counts for each symbol based on deviation thresholds
+ * @param prices Array of BinancePrice objects
+ * @param multiplier Multiplier percentage (e.g., 100 for 100%)
+ * @param timeframe Timeframe type: '15m' or '1h'
+ * @param highlightedColumn The highlighted column window size
+ * @returns Record mapping symbol to object with yellowDots and greenDots (0-4)
+ */
+export function calculateDotCounts(
+  prices: Array<{ symbol: string; price: string; close15m?: string; close1h?: string; maxRanges?: MaxRange[] }>,
+  multiplier: number,
+  timeframe: '15m' | '1h',
+  highlightedColumn: number
+): Record<string, { yellowDots: number; greenDots: number }> {
+  const dotCounts: Record<string, { yellowDots: number; greenDots: number }> = {};
+  const multiplierRatio = multiplier / 100;
+
+  for (const item of prices) {
+    // Get the close price based on timeframe
+    const closePrice = timeframe === '15m' ? item.close15m : item.close1h;
+    if (!closePrice) {
+      dotCounts[item.symbol] = { yellowDots: 0, greenDots: 0 };
+      continue;
+    }
+
+    // Get the highlighted column's MaxRange
+    const range = item.maxRanges?.find(r => r.windowSize === highlightedColumn);
+    if (!range || range.range === 0) {
+      dotCounts[item.symbol] = { yellowDots: 0, greenDots: 0 };
+      continue;
+    }
+
+    // Calculate both thresholds independently
+    const wmaThreshold = (range.wma ?? 0) * multiplierRatio;
+    const maxRangeThreshold = range.range * multiplierRatio;
+
+    // Calculate absolute deviation
+    const currentPrice = parseFloat(item.price);
+    const closePriceNum = parseFloat(closePrice);
+    if (isNaN(currentPrice) || isNaN(closePriceNum)) {
+      dotCounts[item.symbol] = { yellowDots: 0, greenDots: 0 };
+      continue;
+    }
+
+    const absoluteDeviation = Math.abs(currentPrice - closePriceNum);
+
+    // Calculate dot counts
+    const yellowDots = getFilledDots(absoluteDeviation, wmaThreshold);
+    const greenDots = getFilledDots(absoluteDeviation, maxRangeThreshold);
+
+    dotCounts[item.symbol] = { yellowDots, greenDots };
+  }
+
+  return dotCounts;
+}

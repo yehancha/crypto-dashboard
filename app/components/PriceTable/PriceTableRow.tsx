@@ -2,7 +2,7 @@
 
 import { type BinancePrice } from '../../lib/binance';
 import { type TimeframeType } from '../../lib/timeframe';
-import { formatPrice, calculateAbsoluteDeviation, calculateDeviation, formatDeviationWithAbsolute, formatRangeOnly, formatWMA, formatAbsolutePercentage } from '../../utils/price';
+import { formatPrice, calculateAbsoluteDeviation, calculateDeviation, formatDeviationWithAbsolute, formatRangeOnly, formatWMA, formatAbsolutePercentage, getFilledDots } from '../../utils/price';
 
 type DisplayType = 'wma' | 'max-range';
 
@@ -141,16 +141,6 @@ export default function PriceTableRow({
           const maxRangeThreshold = (range?.range ?? 0) * multiplierRatio;
           
           // Calculate how many dots to color based on WMA (yellow) and max-range (green)
-          const getFilledDots = (deviation: number, threshold: number): number => {
-            if (threshold === 0) return 0;
-            const ratio = deviation / threshold;
-            if (ratio > 1) return 4;
-            if (ratio > 0.75) return 3;
-            if (ratio > 0.5) return 2;
-            if (ratio > 0.25) return 1;
-            return 0;
-          };
-          
           const yellowDots = getFilledDots(absDeviation, wmaThreshold);
           const greenDots = getFilledDots(absDeviation, maxRangeThreshold);
           

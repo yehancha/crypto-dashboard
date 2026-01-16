@@ -5,9 +5,10 @@ import { useCryptoPrices } from '../hooks/useCryptoPrices';
 import { useNotifications } from '../hooks/useNotifications';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { type TimeframeType, getTimeframeConfig } from '../lib/timeframe';
-import { calculateHighlightingFlags, getMinutesUntilNextInterval, getHighlightedColumn } from '../utils/price';
+import { calculateHighlightingFlags, calculateDotCounts, getMinutesUntilNextInterval, getHighlightedColumn } from '../utils/price';
 import SymbolInput from './PriceTable/SymbolInput';
 import TimeframeSelector from './PriceTable/TimeframeSelector';
+import NotificationConfig from './PriceTable/NotificationConfig';
 import CandleCountdown from './PriceTable/CandleCountdown';
 import PriceTableHeader from './PriceTable/PriceTableHeader';
 import PriceTableRow from './PriceTable/PriceTableRow';
@@ -27,6 +28,8 @@ export default function PriceTable() {
   const [multiplier, setMultiplier] = useLocalStorage<number>('crypto-dashboard-multiplier', 100);
   const [historyHours, setHistoryHours] = useLocalStorage<number>('crypto-dashboard-history-hours', 12);
   const [showMore, setShowMore] = useLocalStorage<boolean>('crypto-dashboard-show-more', false);
+  const [yellowThreshold, setYellowThreshold] = useLocalStorage<number>('crypto-dashboard-yellow-threshold', 0);
+  const [greenThreshold, setGreenThreshold] = useLocalStorage<number>('crypto-dashboard-green-threshold', 0);
   
   const {
     symbols,
@@ -47,51 +50,63 @@ export default function PriceTable() {
   const minutesRemaining = getMinutesUntilNextInterval(timeframeConfig.intervalMinutes);
   const highlightedColumn = getHighlightedColumn(minutesRemaining, timeframeConfig.maxWindowSize);
 
-  // Calculate highlighting flags
+  // Calculate highlighting flags (still used for row highlighting)
   const highlightingFlags = useMemo(() => {
     return calculateHighlightingFlags(prices, displayType, multiplier, timeframe, highlightedColumn);
   }, [prices, displayType, multiplier, timeframe, highlightedColumn]);
 
-  // Track previous highlighting flags to detect new highlights
-  const previousHighlightingFlagsRef = useRef<Record<string, 'yellow' | 'green' | null>>({});
+  // Calculate dot counts for notifications
+  const dotCounts = useMemo(() => {
+    return calculateDotCounts(prices, multiplier, timeframe, highlightedColumn);
+  }, [prices, multiplier, timeframe, highlightedColumn]);
+
+  // Track previous dot counts to detect when thresholds are newly met
+  const previousDotCountsRef = useRef<Record<string, { yellowDots: number; greenDots: number }>>({});
   const isInitialRenderRef = useRef<boolean>(true);
 
   // Use notifications hook
   const { notify } = useNotifications();
 
-  // Detect new highlights and trigger notifications
+  // Detect when thresholds are met and trigger notifications
   useEffect(() => {
     // Skip notifications on initial render
     if (isInitialRenderRef.current) {
       isInitialRenderRef.current = false;
-      previousHighlightingFlagsRef.current = { ...highlightingFlags };
+      previousDotCountsRef.current = { ...dotCounts };
       return;
     }
 
-    const previousFlags = previousHighlightingFlagsRef.current;
-    const currentFlags = highlightingFlags;
+    // Skip if both thresholds are 0 (notifications disabled)
+    if (yellowThreshold === 0 && greenThreshold === 0) {
+      previousDotCountsRef.current = { ...dotCounts };
+      return;
+    }
 
-    // Find symbols that transitioned to a new/higher highlight state
-    Object.keys(currentFlags).forEach((symbol) => {
-      const previousColor = previousFlags[symbol];
-      const currentColor = currentFlags[symbol];
+    const previousCounts = previousDotCountsRef.current;
+    const currentCounts = dotCounts;
 
-      // Notify if: null -> yellow/green, or yellow -> green
-      const isNewHighlight = previousColor === null && currentColor !== null;
-      const isUpgrade = previousColor === 'yellow' && currentColor === 'green';
+    // Find symbols where thresholds are newly met
+    Object.keys(currentCounts).forEach((symbol) => {
+      const previous = previousCounts[symbol] || { yellowDots: 0, greenDots: 0 };
+      const current = currentCounts[symbol];
 
-      if (isNewHighlight || isUpgrade) {
-        // 1 beep for yellow (WMA threshold), 3 beeps for green (max-range threshold)
-        const beepCount = currentColor === 'green' ? 3 : 1;
+      // Check if thresholds were previously met
+      const previousMet = previous.yellowDots >= yellowThreshold && previous.greenDots >= greenThreshold;
+      
+      // Check if thresholds are currently met
+      const currentMet = current.yellowDots >= yellowThreshold && current.greenDots >= greenThreshold;
+
+      // Notify only when transitioning from not-met to met
+      if (!previousMet && currentMet) {
         notify(`${symbol} ${timeframeConfig.label}`, {
           body: 'Deviation exceeds expected range',
-        }, beepCount);
+        }, 3);
       }
     });
 
-    // Update ref with current flags for next comparison
-    previousHighlightingFlagsRef.current = { ...currentFlags };
-  }, [highlightingFlags, notify, timeframeConfig.label]);
+    // Update ref with current counts for next comparison
+    previousDotCountsRef.current = { ...currentCounts };
+  }, [dotCounts, yellowThreshold, greenThreshold, notify, timeframeConfig.label]);
 
   const handleAddSymbol = () => {
     const trimmedSymbol = newSymbol.trim().toUpperCase();
@@ -151,6 +166,12 @@ export default function PriceTable() {
           </h1>
           <div className="flex items-center gap-4">
             <CandleCountdown timeframe={timeframe} />
+            <NotificationConfig
+              yellowThreshold={yellowThreshold}
+              greenThreshold={greenThreshold}
+              onYellowThresholdChange={setYellowThreshold}
+              onGreenThresholdChange={setGreenThreshold}
+            />
             <TimeframeSelector value={timeframe} onChange={setTimeframe} />
           </div>
         </div>
