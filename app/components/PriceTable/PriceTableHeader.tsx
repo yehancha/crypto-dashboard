@@ -2,6 +2,7 @@
 
 import { type TimeframeType } from '../../lib/timeframe';
 import { getTimeframeConfig } from '../../lib/timeframe';
+import { getMinutesUntilNextInterval, shouldUse4HHourlyMode } from '../../utils/price';
 
 interface PriceTableHeaderProps {
   timeframe: TimeframeType;
@@ -10,6 +11,12 @@ interface PriceTableHeaderProps {
 
 export default function PriceTableHeader({ timeframe, highlightedColumn }: PriceTableHeaderProps) {
   const config = getTimeframeConfig(timeframe);
+  
+  // Determine if we're in 4H hourly mode
+  const use4HHourlyMode = timeframe === '4h' ? shouldUse4HHourlyMode(timeframe, getMinutesUntilNextInterval(240)) : false;
+  
+  // Format threshold column header based on mode
+  const thresholdLabel = use4HHourlyMode ? `${highlightedColumn}H` : `${highlightedColumn}m`;
   
   return (
     <thead className="bg-zinc-100 dark:bg-zinc-800">
@@ -36,7 +43,7 @@ export default function PriceTableHeader({ timeframe, highlightedColumn }: Price
           Safety Rating
         </th>
         <th className="px-6 py-4 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-          Threshold {highlightedColumn}m
+          Threshold {thresholdLabel}
         </th>
       </tr>
     </thead>

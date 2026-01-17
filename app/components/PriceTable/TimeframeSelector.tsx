@@ -21,6 +21,7 @@ export default function TimeframeSelector({ value, onChange }: TimeframeSelector
       >
         <option value="15m">15m</option>
         <option value="1h">1H</option>
+        <option value="4h">4H</option>
       </select>
     </div>
   );

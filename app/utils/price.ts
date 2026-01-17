@@ -311,7 +311,7 @@ export function formatWMA(wma: number | null | undefined, multiplier: number = 1
 
 /**
  * Generic function to calculate minutes remaining until the next interval
- * @param intervalMinutes Interval in minutes (e.g., 15 for 15-minute intervals, 60 for hourly)
+ * @param intervalMinutes Interval in minutes (e.g., 15 for 15-minute intervals, 60 for hourly, 240 for 4-hourly)
  * @returns Number of minutes until the next interval
  */
 export function getMinutesUntilNextInterval(intervalMinutes: number): number {
@@ -323,6 +323,39 @@ export function getMinutesUntilNextInterval(intervalMinutes: number): number {
     nextHour.setUTCHours(nextHour.getUTCHours() + 1);
     nextHour.setUTCMinutes(0, 0, 0);
     return (nextHour.getTime() - now.getTime()) / (1000 * 60);
+  } else if (intervalMinutes === 240) {
+    // For 4-hourly intervals, calculate minutes until next 4-hour interval (00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC)
+    const currentHour = now.getUTCHours();
+    const currentMinute = now.getUTCMinutes();
+    const currentSecond = now.getUTCSeconds();
+    const currentMillisecond = now.getUTCMilliseconds();
+    
+    // 4-hour intervals: 0, 4, 8, 12, 16, 20
+    const intervals = [0, 4, 8, 12, 16, 20];
+    
+    // Find the next interval hour
+    let nextIntervalHour = intervals.find(h => h > currentHour);
+    
+    const nextInterval = new Date(now);
+    
+    // If no interval found in the current day, use the first interval of the next day
+    if (nextIntervalHour === undefined) {
+      nextIntervalHour = intervals[0];
+      nextInterval.setUTCDate(nextInterval.getUTCDate() + 1);
+    } else if (nextIntervalHour === currentHour && (currentMinute === 0 && currentSecond === 0 && currentMillisecond === 0)) {
+      // If we're exactly at an interval time, use the next interval
+      const currentIndex = intervals.indexOf(currentHour);
+      const nextIndex = (currentIndex + 1) % intervals.length;
+      nextIntervalHour = intervals[nextIndex];
+      if (nextIndex === 0) {
+        // Wrapped around to next day
+        nextInterval.setUTCDate(nextInterval.getUTCDate() + 1);
+      }
+    }
+    
+    nextInterval.setUTCHours(nextIntervalHour, 0, 0, 0);
+    
+    return (nextInterval.getTime() - now.getTime()) / (1000 * 60);
   } else {
     // For other intervals (e.g., 15 minutes)
     const currentMinute = now.getUTCMinutes();
@@ -357,6 +390,16 @@ export function getMinutesUntilNext15MinInterval(): number {
  */
 export function getHighlightedColumn(minutesRemaining: number, maxWindowSize: number): number {
   return Math.min(maxWindowSize, Math.max(1, Math.ceil(minutesRemaining)));
+}
+
+/**
+ * Determines if 4H timeframe should use hourly mode (>1 hour until expiry) or minute mode (≤1 hour)
+ * @param timeframe Timeframe type
+ * @param minutesUntilExpiry Minutes until the next interval expiry
+ * @returns true if should use hourly mode, false if should use minute mode
+ */
+export function shouldUse4HHourlyMode(timeframe: string, minutesUntilExpiry: number): boolean {
+  return timeframe === '4h' && minutesUntilExpiry > 60;
 }
 
 /**

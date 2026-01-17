@@ -14,48 +14,11 @@ export default function CandleCountdown({ timeframe }: CandleCountdownProps) {
   useEffect(() => {
     const timeframeConfig = getTimeframeConfig(timeframe);
     
-    // Calculate time remaining until next candle close
+    // Calculate time remaining until next candle close using getMinutesUntilNextInterval
     const calculateTimeRemaining = () => {
-      const now = new Date();
-      const intervalMinutes = timeframeConfig.intervalMinutes;
-      
-      let nextInterval: Date;
-      
-      if (intervalMinutes === 60) {
-        // For hourly intervals, calculate minutes until next hour
-        nextInterval = new Date(now);
-        nextInterval.setUTCHours(nextInterval.getUTCHours() + 1);
-        nextInterval.setUTCMinutes(0, 0, 0);
-      } else {
-        // For other intervals (e.g., 15 minutes)
-        const currentMinute = now.getUTCMinutes();
-        
-        // Calculate the ceiling interval minute
-        let nextIntervalMinute = Math.ceil(currentMinute / intervalMinutes) * intervalMinutes;
-        
-        // Create the next interval time
-        nextInterval = new Date(now);
-        nextInterval.setUTCMinutes(nextIntervalMinute, 0, 0);
-        nextInterval.setUTCSeconds(0, 0);
-        
-        // If the calculated interval is in the past or at the current moment, 
-        // move to the NEXT interval
-        // This handles the case where we're at exactly :00, :15, :30, or :45
-        const timeDiff = nextInterval.getTime() - now.getTime();
-        if (timeDiff <= 0) { // In the past or exactly now
-          nextIntervalMinute += intervalMinutes;
-          if (nextIntervalMinute >= 60) {
-            // Move to next hour
-            nextInterval.setUTCHours(nextInterval.getUTCHours() + 1);
-            nextInterval.setUTCMinutes(nextIntervalMinute - 60, 0, 0);
-          } else {
-            nextInterval.setUTCMinutes(nextIntervalMinute, 0, 0);
-          }
-        }
-      }
-      
-      const diffMs = nextInterval.getTime() - now.getTime();
-      return Math.max(0, Math.floor(diffMs / 1000)); // Return seconds
+      const minutesRemaining = getMinutesUntilNextInterval(timeframeConfig.intervalMinutes);
+      // Convert minutes to seconds
+      return Math.max(0, Math.floor(minutesRemaining * 60));
     };
 
     // Set initial time

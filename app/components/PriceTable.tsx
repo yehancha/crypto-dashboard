@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useCryptoPrices } from '../hooks/useCryptoPrices';
 import { useNotifications } from '../hooks/useNotifications';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { type TimeframeType, getTimeframeConfig } from '../lib/timeframe';
-import { calculateHighlightingFlags, calculateDotCounts, getMinutesUntilNextInterval, getHighlightedColumn } from '../utils/price';
+import { calculateHighlightingFlags, calculateDotCounts, getMinutesUntilNextInterval, getHighlightedColumn, shouldUse4HHourlyMode } from '../utils/price';
 import SymbolInput from './PriceTable/SymbolInput';
 import TimeframeSelector from './PriceTable/TimeframeSelector';
 import NotificationConfig from './PriceTable/NotificationConfig';
@@ -26,10 +26,43 @@ export default function PriceTable() {
   const [timeframe, setTimeframe] = useLocalStorage<TimeframeType>('crypto-dashboard-timeframe', '15m');
   const [displayType, setDisplayType] = useLocalStorage<DisplayType>('crypto-dashboard-display-type', 'max-range');
   const [multiplier, setMultiplier] = useLocalStorage<number>('crypto-dashboard-multiplier', 100);
-  const [historyHours, setHistoryHours] = useLocalStorage<number>('crypto-dashboard-history-hours', 12);
   const [showMore, setShowMore] = useLocalStorage<boolean>('crypto-dashboard-show-more', false);
   const [yellowThreshold, setYellowThreshold] = useLocalStorage<number>('crypto-dashboard-yellow-threshold', 0);
   const [greenThreshold, setGreenThreshold] = useLocalStorage<number>('crypto-dashboard-green-threshold', 0);
+  
+  // Separate history storage for 4H hourly vs minute mode
+  const [historyHoursHourly, setHistoryHoursHourly] = useLocalStorage<number>('crypto-dashboard-history-hours-4h-hourly', 168);
+  const [historyHoursMinute, setHistoryHoursMinute] = useLocalStorage<number>('crypto-dashboard-history-hours-4h-minute', 12);
+  const [historyHoursOther, setHistoryHoursOther] = useLocalStorage<number>('crypto-dashboard-history-hours', 12);
+
+  const timeframeConfig = getTimeframeConfig(timeframe);
+  const minutesRemaining = getMinutesUntilNextInterval(timeframeConfig.intervalMinutes);
+  
+  // Determine if we're in 4H hourly mode
+  const use4HHourlyMode = timeframe === '4h' ? shouldUse4HHourlyMode(timeframe, minutesRemaining) : false;
+  
+  // Select the appropriate history hours value based on timeframe and mode
+  const historyHours = timeframe === '4h' 
+    ? (use4HHourlyMode ? historyHoursHourly : historyHoursMinute)
+    : historyHoursOther;
+  
+  // Wrapper function to update the appropriate history hours based on current mode
+  // Note: This needs to check the current mode when called, not when defined
+  const handleHistoryHoursChange = useCallback((value: number) => {
+    // Check current mode at call time by recalculating
+    const currentMinutesRemaining = timeframe === '4h' ? getMinutesUntilNextInterval(240) : 0;
+    const currentUse4HHourlyMode = timeframe === '4h' ? shouldUse4HHourlyMode(timeframe, currentMinutesRemaining) : false;
+    
+    if (timeframe === '4h') {
+      if (currentUse4HHourlyMode) {
+        setHistoryHoursHourly(value);
+      } else {
+        setHistoryHoursMinute(value);
+      }
+    } else {
+      setHistoryHoursOther(value);
+    }
+  }, [timeframe, setHistoryHoursHourly, setHistoryHoursMinute, setHistoryHoursOther]);
   
   const {
     symbols,
@@ -45,10 +78,11 @@ export default function PriceTable() {
   const [newSymbol, setNewSymbol] = useState('');
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-
-  const timeframeConfig = getTimeframeConfig(timeframe);
-  const minutesRemaining = getMinutesUntilNextInterval(timeframeConfig.intervalMinutes);
-  const highlightedColumn = getHighlightedColumn(minutesRemaining, timeframeConfig.maxWindowSize);
+  
+  // Calculate highlighted column based on timeframe and mode
+  const highlightedColumn = use4HHourlyMode
+    ? Math.min(4, Math.max(1, Math.ceil(minutesRemaining / 60))) // Hours for 4H hourly mode
+    : getHighlightedColumn(minutesRemaining, timeframeConfig.maxWindowSize); // Minutes for other modes
 
   // Calculate highlighting flags (still used for row highlighting)
   const highlightingFlags = useMemo(() => {
@@ -223,7 +257,7 @@ export default function PriceTable() {
           historyHours={historyHours}
           onDisplayTypeChange={setDisplayType}
           onMultiplierChange={setMultiplier}
-          onHistoryHoursChange={setHistoryHours}
+          onHistoryHoursChange={handleHistoryHoursChange}
           highlightingFlags={highlightingFlags}
           showMore={showMore}
           onShowMoreChange={setShowMore}
