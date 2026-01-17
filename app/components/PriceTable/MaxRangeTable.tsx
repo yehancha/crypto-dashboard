@@ -53,10 +53,14 @@ export default function MaxRangeTable({
   
   // Calculate highlighted column based on timeframe and mode
   const minutesRemaining = getMinutesUntilNextInterval(timeframeConfig.intervalMinutes);
+  // Determine effective max window size for column highlighting
+  const effectiveMaxWindowSize = timeframe === '4h' 
+    ? (use4HHourlyMode ? 4 : 60)
+    : timeframeConfig.maxWindowSize;
   // For 4H hourly mode, convert minutes to hours for highlighted column
   const highlightedColumn = use4HHourlyMode 
     ? Math.min(4, Math.max(1, Math.ceil(minutesRemaining / 60)))
-    : getHighlightedColumn(minutesRemaining, timeframeConfig.maxWindowSize);
+    : getHighlightedColumn(minutesRemaining, effectiveMaxWindowSize);
 
   // Generate multiplier options from 10% to 200% in 10% increments
   const multiplierOptions = Array.from({ length: 20 }, (_, i) => (i + 1) * 10);
@@ -146,9 +150,8 @@ export default function MaxRangeTable({
             >
               {use4HHourlyMode ? `${highlightedColumn}H` : `${highlightedColumn}m`}
             </th>
-            {Array.from({ length: use4HHourlyMode ? 4 : timeframeConfig.columnCount }, (_, i) => {
-              const maxWindowSize = use4HHourlyMode ? 4 : timeframeConfig.maxWindowSize;
-              return maxWindowSize - i;
+            {Array.from({ length: effectiveMaxWindowSize }, (_, i) => {
+              return effectiveMaxWindowSize - i;
             }).map((windowSize) => {
               const isHighlighted = windowSize === highlightedColumn;
               return (
@@ -211,9 +214,8 @@ export default function MaxRangeTable({
                   }
                 })()}
               </td>
-            {Array.from({ length: use4HHourlyMode ? 4 : timeframeConfig.columnCount }, (_, i) => {
-              const maxWindowSize = use4HHourlyMode ? 4 : timeframeConfig.maxWindowSize;
-              return maxWindowSize - i;
+            {Array.from({ length: effectiveMaxWindowSize }, (_, i) => {
+              return effectiveMaxWindowSize - i;
             }).map((windowSize) => {
               const range = item.maxRanges?.find(r => r.windowSize === windowSize);
               const isHighlighted = windowSize === highlightedColumn;

@@ -50,8 +50,10 @@ export function useCryptoPrices(
   // Calculate candle limit based on history hours and mode
   // For 4H hourly mode, limit is in hours; for others, convert to minutes
   const candleLimit = timeframe === '4h' && use4HHourlyMode ? historyHours : historyHours * 60;
-  // For 4H hourly mode, max window size is 4; for minute mode or other timeframes, use config
-  const effectiveMaxWindowSize = timeframe === '4h' && use4HHourlyMode ? 4 : timeframeConfig.maxWindowSize;
+  // For 4H hourly mode, max window size is 4; for 4H minute mode, it's 60; for others, use config
+  const effectiveMaxWindowSize = timeframe === '4h' 
+    ? (use4HHourlyMode ? 4 : 60)
+    : timeframeConfig.maxWindowSize;
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const candleIntervalRef = useRef<NodeJS.Timeout | null>(null);

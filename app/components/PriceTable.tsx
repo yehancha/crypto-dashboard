@@ -80,9 +80,13 @@ export default function PriceTable() {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   
   // Calculate highlighted column based on timeframe and mode
+  // For 4H timeframe, use 60 for minute mode, 4 for hourly mode
+  const effectiveMaxWindowSize = timeframe === '4h' 
+    ? (use4HHourlyMode ? 4 : 60)
+    : timeframeConfig.maxWindowSize;
   const highlightedColumn = use4HHourlyMode
     ? Math.min(4, Math.max(1, Math.ceil(minutesRemaining / 60))) // Hours for 4H hourly mode
-    : getHighlightedColumn(minutesRemaining, timeframeConfig.maxWindowSize); // Minutes for other modes
+    : getHighlightedColumn(minutesRemaining, effectiveMaxWindowSize); // Minutes for other modes
 
   // Calculate highlighting flags (still used for row highlighting)
   const highlightingFlags = useMemo(() => {
