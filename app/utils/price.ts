@@ -91,6 +91,7 @@ export function formatDeviationWithAbsolute(
 }
 
 import type { Candle, MaxRange, WindowRangeCache, CachedWindowRange } from '../lib/binance';
+import type { TimeframeType } from '../lib/timeframe';
 
 /**
  * Generates a cache key for a window range calculation
@@ -410,6 +411,15 @@ export function getMinutesUntilNextInterval(intervalMinutes: number): number {
     nextInterval.setUTCHours(nextIntervalHour, 0, 0, 0);
     
     return (nextInterval.getTime() - now.getTime()) / (1000 * 60);
+  } else if (intervalMinutes === 1440) {
+    // For daily intervals, calculate minutes until next UTC midnight
+    const nextMidnight = new Date(Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() + 1,
+      0, 0, 0, 0
+    ));
+    return (nextMidnight.getTime() - now.getTime()) / (1000 * 60);
   } else {
     // For other intervals (e.g., 15 minutes)
     const currentMinute = now.getUTCMinutes();
@@ -447,6 +457,46 @@ export function getHighlightedColumn(minutesRemaining: number, maxWindowSize: nu
 }
 
 /**
+ * Effective resolution used for max-range calculations.
+ * Currently we switch between 1m and 1h candles based solely on time-to-expiry.
+ */
+export type EffectiveResolution = '1m' | '1h';
+
+/**
+ * Chooses effective resolution based on minutes until next expiry.
+ * If more than 60 minutes remain, use 1h candles; otherwise use 1m candles.
+ */
+export function getEffectiveResolution(minutesUntilExpiry: number): EffectiveResolution {
+  return minutesUntilExpiry > 60 ? '1h' : '1m';
+}
+
+/**
+ * Returns the effective maximum window size for a timeframe/resolution pair.
+ * This determines how many consecutive candles we consider for max-range.
+ */
+export function getEffectiveMaxWindowSize(
+  timeframe: TimeframeType,
+  resolution: EffectiveResolution
+): number {
+  switch (timeframe) {
+    case '15m':
+      // 15 windows of 1m candles.
+      return 15;
+    case '1h':
+      // 60 windows of 1m candles.
+      return 60;
+    case '4h':
+      // 4 windows of 1h candles or 60 windows of 1m candles.
+      return resolution === '1h' ? 4 : 60;
+    case '1d':
+      // 24 windows of 1h candles or 60 windows of 1m candles.
+      return resolution === '1h' ? 24 : 60;
+    default:
+      return 60;
+  }
+}
+
+/**
  * Determines if 4H timeframe should use hourly mode (>1 hour until expiry) or minute mode (≤1 hour)
  * @param timeframe Timeframe type
  * @param minutesUntilExpiry Minutes until the next interval expiry
@@ -466,10 +516,10 @@ export function shouldUse4HHourlyMode(timeframe: string, minutesUntilExpiry: num
  * @returns Record mapping symbol to 'yellow' | 'green' | null indicating highlight color
  */
 export function calculateHighlightingFlags(
-  prices: Array<{ symbol: string; price: string; close15m?: string; close1h?: string; maxRanges?: MaxRange[] }>,
+  prices: Array<{ symbol: string; price: string; close15m?: string; close1h?: string; close1d?: string; maxRanges?: MaxRange[] }>,
   displayType: 'wma' | 'max-range',
   multiplier: number,
-  timeframe: '15m' | '1h',
+  timeframe: TimeframeType,
   highlightedColumn: number
 ): Record<string, 'yellow' | 'green' | null> {
   const flags: Record<string, 'yellow' | 'green' | null> = {};
@@ -477,7 +527,12 @@ export function calculateHighlightingFlags(
 
   for (const item of prices) {
     // Get the close price based on timeframe
-    const closePrice = timeframe === '15m' ? item.close15m : item.close1h;
+    const closePrice =
+      timeframe === '15m'
+        ? item.close15m
+        : timeframe === '1d'
+        ? item.close1d
+        : item.close1h;
     if (!closePrice) {
       flags[item.symbol] = null;
       continue;
@@ -547,9 +602,9 @@ export function getFilledDots(deviation: number, threshold: number): number {
  * @returns Record mapping symbol to object with yellowDots and greenDots (0-4)
  */
 export function calculateDotCounts(
-  prices: Array<{ symbol: string; price: string; close15m?: string; close1h?: string; maxRanges?: MaxRange[] }>,
+  prices: Array<{ symbol: string; price: string; close15m?: string; close1h?: string; close1d?: string; maxRanges?: MaxRange[] }>,
   multiplier: number,
-  timeframe: '15m' | '1h',
+  timeframe: TimeframeType,
   highlightedColumn: number
 ): Record<string, { yellowDots: number; greenDots: number }> {
   const dotCounts: Record<string, { yellowDots: number; greenDots: number }> = {};
@@ -557,7 +612,12 @@ export function calculateDotCounts(
 
   for (const item of prices) {
     // Get the close price based on timeframe
-    const closePrice = timeframe === '15m' ? item.close15m : item.close1h;
+    const closePrice =
+      timeframe === '15m'
+        ? item.close15m
+        : timeframe === '1d'
+        ? item.close1d
+        : item.close1h;
     if (!closePrice) {
       dotCounts[item.symbol] = { yellowDots: 0, greenDots: 0 };
       continue;

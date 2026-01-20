@@ -1,4 +1,4 @@
-export type TimeframeType = '15m' | '1h' | '4h';
+export type TimeframeType = '15m' | '1h' | '4h' | '1d';
 
 export interface TimeframeConfig {
   type: TimeframeType;
@@ -6,8 +6,8 @@ export interface TimeframeConfig {
   intervalMinutes: number; // 15, 60, or 240
   maxWindowSize: number; // 15, 60, or dynamic for 4h
   candleLimit: number; // 60, 600, or dynamic for 4h
-  candleInterval: string; // '15m', '1h', or '4h' for Binance API
-  columnCount: number; // 15, 60, or dynamic for 4h
+  candleInterval: string; // '15m', '1h', '4h', or '1d' for Binance API
+  columnCount: number; // 15, 60, or dynamic for 4h/1d
 }
 
 export const TIMEFRAME_CONFIGS: Record<TimeframeType, TimeframeConfig> = {
@@ -37,6 +37,19 @@ export const TIMEFRAME_CONFIGS: Record<TimeframeType, TimeframeConfig> = {
     candleLimit: 672, // For 672 hours of history in hourly mode
     candleInterval: '4h',
     columnCount: 4, // For hourly mode, will be 60 for minute mode
+  },
+  '1d': {
+    type: '1d',
+    label: '1D',
+    intervalMinutes: 1440,
+    // For 1D we use 1h windows in hourly mode and 1m windows in minute mode.
+    // Base config reflects hourly mode; effective window sizes are handled by helpers.
+    maxWindowSize: 24,
+    // Candle limit is in hours for hourly mode (e.g. up to 672h of history),
+    // but effective limits for 1m/1h data are computed in hooks.
+    candleLimit: 672,
+    candleInterval: '1d',
+    columnCount: 24,
   },
 };
 

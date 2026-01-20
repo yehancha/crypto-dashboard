@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { getPrices, getCandleCloses, get1mCandlesBatch, get1mCandles, get1hCandlesBatch, get1hCandles, type BinancePrice, type Candle, type WindowRangeCache, BinanceRateLimitError } from '../lib/binance';
-import { calculateMaxRanges, pruneWindowRangeCache, getMinutesUntilNextInterval, shouldUse4HHourlyMode } from '../utils/price';
+import { calculateMaxRanges, pruneWindowRangeCache, getMinutesUntilNextInterval, getEffectiveResolution } from '../utils/price';
 import { type TimeframeType, getTimeframeConfig } from '../lib/timeframe';
 import { useLocalStorage } from './useLocalStorage';
 
@@ -38,22 +38,38 @@ export function useCryptoPrices(
   const [error, setError] = useState<string | null>(null);
   const [isRateLimited, setIsRateLimited] = useState(false);
   
-  // State for 4H mode detection (hourly vs minute)
+  // State for dynamic mode detection (hourly vs minute) for 4H and 1D timeframes
   const [use4HHourlyMode, setUse4HHourlyMode] = useState(() => {
     if (timeframe === '4h') {
       const minutesUntilExpiry = getMinutesUntilNextInterval(240);
-      return shouldUse4HHourlyMode(timeframe, minutesUntilExpiry);
+      return getEffectiveResolution(minutesUntilExpiry) === '1h';
+    }
+    return false;
+  });
+
+  const [use1DHourlyMode, setUse1DHourlyMode] = useState(() => {
+    if (timeframe === '1d') {
+      const minutesUntilExpiry = getMinutesUntilNextInterval(1440);
+      return getEffectiveResolution(minutesUntilExpiry) === '1h';
     }
     return false;
   });
   
+  const is4HHourly = timeframe === '4h' && use4HHourlyMode;
+  const is1DHourly = timeframe === '1d' && use1DHourlyMode;
+  const usesHourlyResolution = is4HHourly || is1DHourly;
+
   // Calculate candle limit based on history hours and mode
-  // For 4H hourly mode, limit is in hours; for others, convert to minutes
-  const candleLimit = timeframe === '4h' && use4HHourlyMode ? historyHours : historyHours * 60;
-  // For 4H hourly mode, max window size is 4; for 4H minute mode, it's 60; for others, use config
-  const effectiveMaxWindowSize = timeframe === '4h' 
-    ? (use4HHourlyMode ? 4 : 60)
-    : timeframeConfig.maxWindowSize;
+  // For hourly resolution, limit is in hours; for minute resolution, convert hours to minutes
+  const candleLimit = usesHourlyResolution ? historyHours : historyHours * 60;
+
+  // Effective max window size for max-range calculations
+  const effectiveMaxWindowSize =
+    timeframe === '4h'
+      ? (use4HHourlyMode ? 4 : 60)
+      : timeframe === '1d'
+      ? (use1DHourlyMode ? 24 : 60)
+      : timeframeConfig.maxWindowSize;
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const candleIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -95,26 +111,21 @@ export function useCryptoPrices(
   };
 
   const setupCandleFetching = () => {
-    // For 4H timeframe, use appropriate function based on mode
-    if (timeframe === '4h') {
-      if (use4HHourlyMode) {
-        // Clear 1m polling and fetch 1h candles
-        if (candle1mIntervalRef.current) {
-          clearInterval(candle1mIntervalRef.current);
-          candle1mIntervalRef.current = null;
-        }
-        fetch1hCandles();
-        // Poll 1h candles every hour (3600000 ms)
-        if (candle1mIntervalRef.current) {
-          clearInterval(candle1mIntervalRef.current);
-        }
-        candle1mIntervalRef.current = setInterval(fetch1hCandles, 3600000);
-      } else {
-        // Use 1m candles
-        setup1mCandlePolling();
+    const isHourlyMode =
+      (timeframe === '4h' && use4HHourlyMode) ||
+      (timeframe === '1d' && use1DHourlyMode);
+
+    if (isHourlyMode) {
+      // Clear 1m polling and fetch 1h candles
+      if (candle1mIntervalRef.current) {
+        clearInterval(candle1mIntervalRef.current);
+        candle1mIntervalRef.current = null;
       }
+      fetch1hCandles();
+      // Poll 1h candles every hour (3600000 ms)
+      candle1mIntervalRef.current = setInterval(fetch1hCandles, 3600000);
     } else {
-      // For other timeframes, use 1m candles
+      // Use 1m candles for all non-hourly modes
       setup1mCandlePolling();
     }
   };
@@ -144,24 +155,23 @@ export function useCryptoPrices(
           const candles1m = candles1mRef.current.get(symbol);
           const candles1h = candles1hRef.current.get(symbol);
           // Use appropriate candles based on timeframe and mode
-          const activeCandles = (timeframe === '4h' && use4HHourlyMode) ? candles1h : candles1m;
+          const activeCandles = usesHourlyResolution ? candles1h : candles1m;
           const maxRanges = getMaxRangesWithCache(symbol, activeCandles);
           
           const updatedPrice: BinancePrice = {
             ...newPrice,
-            candles1m: timeframe === '4h' && use4HHourlyMode ? prevPrice?.candles1m : (prevPrice?.candles1m || candles1m),
-            candles1h: timeframe === '4h' && use4HHourlyMode ? (prevPrice?.candles1h || candles1h) : prevPrice?.candles1h,
+            candles1m: prevPrice?.candles1m || candles1m,
+            candles1h: prevPrice?.candles1h || candles1h,
             maxRanges: prevPrice?.maxRanges || maxRanges,
           };
           
           // Preserve close price based on timeframe
           if (timeframe === '15m') {
             updatedPrice.close15m = prevPrice?.close15m || newPrice.close15m;
-          } else if (timeframe === '4h') {
-            // For 4H, use 4H candle close (fetched via getCandleCloses with '4h')
+          } else if (timeframe === '1h' || timeframe === '4h') {
             updatedPrice.close1h = prevPrice?.close1h;
-          } else {
-            updatedPrice.close1h = prevPrice?.close1h;
+          } else if (timeframe === '1d') {
+            updatedPrice.close1d = prevPrice?.close1d;
           }
           
           return updatedPrice;
@@ -225,21 +235,23 @@ export function useCryptoPrices(
         prevPrices.map((price) => {
           const prevCandles1m = candles1mRef.current.get(price.symbol);
           const prevCandles1h = candles1hRef.current.get(price.symbol);
-          const activeCandles = (timeframe === '4h' && use4HHourlyMode) ? prevCandles1h : prevCandles1m;
+          const activeCandles = usesHourlyResolution ? prevCandles1h : prevCandles1m;
           const prevRanges = getMaxRangesWithCache(price.symbol, activeCandles);
           
           const updatedPrice: BinancePrice = {
             ...price,
-            candles1m: timeframe === '4h' && use4HHourlyMode ? price.candles1m : prevCandles1m,
-            candles1h: timeframe === '4h' && use4HHourlyMode ? prevCandles1h : price.candles1h,
+            candles1m: prevCandles1m,
+            candles1h: prevCandles1h,
             maxRanges: prevRanges,
           };
           
           // Update close price based on timeframe
           if (timeframe === '15m') {
             updatedPrice.close15m = candleCloses[price.symbol] || price.close15m;
-          } else {
+          } else if (timeframe === '1h' || timeframe === '4h') {
             updatedPrice.close1h = candleCloses[price.symbol] || price.close1h;
+          } else if (timeframe === '1d') {
+            updatedPrice.close1d = candleCloses[price.symbol] || price.close1d;
           }
           
           return updatedPrice;
@@ -357,7 +369,6 @@ export function useCryptoPrices(
           return {
             ...price,
             candles1m: candles,
-            candles1h: timeframe === '4h' && use4HHourlyMode ? price.candles1h : undefined,
             maxRanges,
           };
         })
@@ -529,7 +540,7 @@ export function useCryptoPrices(
 
     const checkMode = () => {
       const minutesUntilExpiry = getMinutesUntilNextInterval(240);
-      const shouldUseHourly = shouldUse4HHourlyMode(timeframe, minutesUntilExpiry);
+      const shouldUseHourly = getEffectiveResolution(minutesUntilExpiry) === '1h';
       setUse4HHourlyMode(prev => {
         // If mode changed, trigger refetch
         if (prev !== shouldUseHourly) {
@@ -555,13 +566,41 @@ export function useCryptoPrices(
     return () => clearInterval(modeCheckInterval);
   }, [timeframe]);
 
+  // Monitor expiry time for 1D timeframe to switch modes dynamically
+  useEffect(() => {
+    if (timeframe !== '1d') {
+      return;
+    }
+
+    const checkMode = () => {
+      const minutesUntilExpiry = getMinutesUntilNextInterval(1440);
+      const shouldUseHourly = getEffectiveResolution(minutesUntilExpiry) === '1h';
+      setUse1DHourlyMode(prev => {
+        if (prev !== shouldUseHourly) {
+          setTimeout(() => {
+            if (shouldUseHourly) {
+              fetch1hCandles();
+            } else {
+              fetch1mCandles();
+            }
+          }, 0);
+        }
+        return shouldUseHourly;
+      });
+    };
+
+    checkMode();
+    const modeCheckInterval = setInterval(checkMode, 60000);
+    return () => clearInterval(modeCheckInterval);
+  }, [timeframe]);
+
   useEffect(() => {
     // Initial fetch
     fetchPrices();
     fetchCandleCloses();
     
     // Set up appropriate candle fetching based on timeframe and mode
-    if (timeframe === '4h' && use4HHourlyMode) {
+    if (usesHourlyResolution) {
       fetch1hCandles();
     } else {
       fetch1mCandles();
@@ -588,7 +627,7 @@ export function useCryptoPrices(
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbols, timeframe, historyHours, use4HHourlyMode]);
+  }, [symbols, timeframe, historyHours, usesHourlyResolution]);
 
   return {
     symbols,

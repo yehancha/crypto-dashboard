@@ -2,7 +2,7 @@
 
 import { type TimeframeType } from '../../lib/timeframe';
 import { getTimeframeConfig } from '../../lib/timeframe';
-import { getMinutesUntilNextInterval, shouldUse4HHourlyMode } from '../../utils/price';
+import { getMinutesUntilNextInterval, getEffectiveResolution } from '../../utils/price';
 
 interface PriceTableHeaderProps {
   timeframe: TimeframeType;
@@ -12,11 +12,13 @@ interface PriceTableHeaderProps {
 export default function PriceTableHeader({ timeframe, highlightedColumn }: PriceTableHeaderProps) {
   const config = getTimeframeConfig(timeframe);
   
-  // Determine if we're in 4H hourly mode
-  const use4HHourlyMode = timeframe === '4h' ? shouldUse4HHourlyMode(timeframe, getMinutesUntilNextInterval(240)) : false;
+  // Determine effective resolution based on time to expiry for dynamic timeframes
+  const minutesUntilExpiry = getMinutesUntilNextInterval(config.intervalMinutes);
+  const supportsDynamicResolution = timeframe === '4h' || timeframe === '1d';
+  const resolution = supportsDynamicResolution ? getEffectiveResolution(minutesUntilExpiry) : '1m';
   
   // Format threshold column header based on mode
-  const thresholdLabel = use4HHourlyMode ? `${highlightedColumn}H` : `${highlightedColumn}m`;
+  const thresholdLabel = resolution === '1h' ? `${highlightedColumn}H` : `${highlightedColumn}m`;
   
   return (
     <thead className="bg-zinc-100 dark:bg-zinc-800">

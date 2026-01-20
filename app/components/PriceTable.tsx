@@ -5,7 +5,7 @@ import { useCryptoPrices } from '../hooks/useCryptoPrices';
 import { useNotifications } from '../hooks/useNotifications';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { type TimeframeType, getTimeframeConfig } from '../lib/timeframe';
-import { calculateHighlightingFlags, calculateDotCounts, getMinutesUntilNextInterval, getHighlightedColumn, shouldUse4HHourlyMode } from '../utils/price';
+import { calculateHighlightingFlags, calculateDotCounts, getMinutesUntilNextInterval, getHighlightedColumn, getEffectiveResolution, type EffectiveResolution } from '../utils/price';
 import SymbolInput from './PriceTable/SymbolInput';
 import TimeframeSelector from './PriceTable/TimeframeSelector';
 import NotificationConfig from './PriceTable/NotificationConfig';
@@ -30,39 +30,53 @@ export default function PriceTable() {
   const [yellowThreshold, setYellowThreshold] = useLocalStorage<number>('crypto-dashboard-yellow-threshold', 0);
   const [greenThreshold, setGreenThreshold] = useLocalStorage<number>('crypto-dashboard-green-threshold', 0);
   
-  // Separate history storage for 4H hourly vs minute mode
-  const [historyHoursHourly, setHistoryHoursHourly] = useLocalStorage<number>('crypto-dashboard-history-hours-4h-hourly', 168);
-  const [historyHoursMinute, setHistoryHoursMinute] = useLocalStorage<number>('crypto-dashboard-history-hours-4h-minute', 12);
+  // Separate history storage for 4H and 1D hourly vs minute modes
+  const [historyHours4HHourly, setHistoryHours4HHourly] = useLocalStorage<number>('crypto-dashboard-history-hours-4h-hourly', 168);
+  const [historyHours4HMinute, setHistoryHours4HMinute] = useLocalStorage<number>('crypto-dashboard-history-hours-4h-minute', 12);
+  const [historyHours1DHourly, setHistoryHours1DHourly] = useLocalStorage<number>('crypto-dashboard-history-hours-1d-hourly', 168);
+  const [historyHours1DMinute, setHistoryHours1DMinute] = useLocalStorage<number>('crypto-dashboard-history-hours-1d-minute', 24);
   const [historyHoursOther, setHistoryHoursOther] = useLocalStorage<number>('crypto-dashboard-history-hours', 12);
 
   const timeframeConfig = getTimeframeConfig(timeframe);
   const minutesRemaining = getMinutesUntilNextInterval(timeframeConfig.intervalMinutes);
   
-  // Determine if we're in 4H hourly mode
-  const use4HHourlyMode = timeframe === '4h' ? shouldUse4HHourlyMode(timeframe, minutesRemaining) : false;
+  const supportsDynamicResolution = timeframe === '4h' || timeframe === '1d';
+  const resolution: EffectiveResolution = supportsDynamicResolution ? getEffectiveResolution(minutesRemaining) : '1m';
+  const isHourlyResolution = resolution === '1h';
   
   // Select the appropriate history hours value based on timeframe and mode
-  const historyHours = timeframe === '4h' 
-    ? (use4HHourlyMode ? historyHoursHourly : historyHoursMinute)
-    : historyHoursOther;
+  const historyHours =
+    timeframe === '4h'
+      ? (isHourlyResolution ? historyHours4HHourly : historyHours4HMinute)
+      : timeframe === '1d'
+      ? (isHourlyResolution ? historyHours1DHourly : historyHours1DMinute)
+      : historyHoursOther;
   
   // Wrapper function to update the appropriate history hours based on current mode
-  // Note: This needs to check the current mode when called, not when defined
   const handleHistoryHoursChange = useCallback((value: number) => {
-    // Check current mode at call time by recalculating
-    const currentMinutesRemaining = timeframe === '4h' ? getMinutesUntilNextInterval(240) : 0;
-    const currentUse4HHourlyMode = timeframe === '4h' ? shouldUse4HHourlyMode(timeframe, currentMinutesRemaining) : false;
-    
-    if (timeframe === '4h') {
-      if (currentUse4HHourlyMode) {
-        setHistoryHoursHourly(value);
+    if (timeframe === '4h' || timeframe === '1d') {
+      const cfg = getTimeframeConfig(timeframe);
+      const currentMinutesRemaining = getMinutesUntilNextInterval(cfg.intervalMinutes);
+      const currentResolution = getEffectiveResolution(currentMinutesRemaining);
+      const currentIsHourly = currentResolution === '1h';
+
+      if (timeframe === '4h') {
+        if (currentIsHourly) {
+          setHistoryHours4HHourly(value);
+        } else {
+          setHistoryHours4HMinute(value);
+        }
       } else {
-        setHistoryHoursMinute(value);
+        if (currentIsHourly) {
+          setHistoryHours1DHourly(value);
+        } else {
+          setHistoryHours1DMinute(value);
+        }
       }
     } else {
       setHistoryHoursOther(value);
     }
-  }, [timeframe, setHistoryHoursHourly, setHistoryHoursMinute, setHistoryHoursOther]);
+  }, [timeframe, setHistoryHours4HHourly, setHistoryHours4HMinute, setHistoryHours1DHourly, setHistoryHours1DMinute, setHistoryHoursOther]);
   
   const {
     symbols,
@@ -80,13 +94,17 @@ export default function PriceTable() {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   
   // Calculate highlighted column based on timeframe and mode
-  // For 4H timeframe, use 60 for minute mode, 4 for hourly mode
-  const effectiveMaxWindowSize = timeframe === '4h' 
-    ? (use4HHourlyMode ? 4 : 60)
-    : timeframeConfig.maxWindowSize;
-  const highlightedColumn = use4HHourlyMode
-    ? Math.min(4, Math.max(1, Math.ceil(minutesRemaining / 60))) // Hours for 4H hourly mode
-    : getHighlightedColumn(minutesRemaining, effectiveMaxWindowSize); // Minutes for other modes
+  const effectiveMaxWindowSize =
+    timeframe === '4h'
+      ? (isHourlyResolution ? 4 : 60)
+      : timeframe === '1d'
+      ? (isHourlyResolution ? 24 : 60)
+      : timeframeConfig.maxWindowSize;
+
+  const highlightedColumn =
+    isHourlyResolution
+      ? Math.min(effectiveMaxWindowSize, Math.max(1, Math.ceil(minutesRemaining / 60)))
+      : getHighlightedColumn(minutesRemaining, effectiveMaxWindowSize);
 
   // Calculate highlighting flags (still used for row highlighting)
   const highlightingFlags = useMemo(() => {

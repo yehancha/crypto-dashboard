@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { type BinancePrice } from '../../lib/binance';
 import { type TimeframeType } from '../../lib/timeframe';
 import { getTimeframeConfig } from '../../lib/timeframe';
-import { formatRangeDisplay, formatRangeOnly, formatWMA, formatChange, getMinutesUntilNextInterval, getHighlightedColumn, shouldUse4HHourlyMode } from '../../utils/price';
+import { formatRangeDisplay, formatRangeOnly, formatWMA, formatChange, getMinutesUntilNextInterval, getHighlightedColumn, getEffectiveResolution, getEffectiveMaxWindowSize, type EffectiveResolution } from '../../utils/price';
 
 type DisplayType = 'wma' | 'max-range';
 
@@ -48,27 +48,28 @@ export default function MaxRangeTable({
     return () => clearInterval(interval);
   }, []);
 
-  // Determine if we're in 4H hourly mode
-  const use4HHourlyMode = timeframe === '4h' ? shouldUse4HHourlyMode(timeframe, getMinutesUntilNextInterval(240)) : false;
-  
-  // Calculate highlighted column based on timeframe and mode
+  const dynamicTimeframe = timeframe === '4h' || timeframe === '1d';
+
+  // Calculate highlighted column based on timeframe and effective resolution
   const minutesRemaining = getMinutesUntilNextInterval(timeframeConfig.intervalMinutes);
-  // Determine effective max window size for column highlighting
-  const effectiveMaxWindowSize = timeframe === '4h' 
-    ? (use4HHourlyMode ? 4 : 60)
-    : timeframeConfig.maxWindowSize;
-  // For 4H hourly mode, convert minutes to hours for highlighted column
-  const highlightedColumn = use4HHourlyMode 
-    ? Math.min(4, Math.max(1, Math.ceil(minutesRemaining / 60)))
-    : getHighlightedColumn(minutesRemaining, effectiveMaxWindowSize);
+  const resolution: EffectiveResolution = dynamicTimeframe ? getEffectiveResolution(minutesRemaining) : '1m';
+  const effectiveMaxWindowSize = getEffectiveMaxWindowSize(timeframe, resolution);
+
+  const highlightedColumn =
+    resolution === '1h'
+      ? Math.min(effectiveMaxWindowSize, Math.max(1, Math.ceil(minutesRemaining / 60)))
+      : getHighlightedColumn(minutesRemaining, effectiveMaxWindowSize);
 
   // Generate multiplier options from 10% to 200% in 10% increments
   const multiplierOptions = Array.from({ length: 20 }, (_, i) => (i + 1) * 10);
   
   // Generate history options based on mode
-  const historyHoursOptions = use4HHourlyMode
-    ? [4, 6, 12, 24, 48, 72, 96, 120, 144, 168, 336, 504, 672] // Hours for hourly mode
-    : Array.from({ length: 16 }, (_, i) => i + 1); // Hours for minute mode (current behavior)
+  const historyHoursOptions =
+    resolution === '1h'
+      ? timeframe === '1d'
+        ? [24, 48, 72, 96, 120, 168, 336, 504, 672]
+        : [4, 6, 12, 24, 48, 72, 96, 120, 144, 168, 336, 504, 672]
+      : Array.from({ length: 16 }, (_, i) => i + 1);
 
   if (prices.length === 0) {
     return null;
@@ -146,9 +147,9 @@ export default function MaxRangeTable({
             </th>
             <th
               className={`px-4 py-4 text-right text-xs font-semibold text-zinc-900 dark:text-zinc-50 bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-500`}
-              title={use4HHourlyMode ? `${highlightedColumn} hour max range` : `${highlightedColumn} minute max range`}
+              title={resolution === '1h' ? `${highlightedColumn} hour max range` : `${highlightedColumn} minute max range`}
             >
-              {use4HHourlyMode ? `${highlightedColumn}H` : `${highlightedColumn}m`}
+              {resolution === '1h' ? `${highlightedColumn}H` : `${highlightedColumn}m`}
             </th>
             {Array.from({ length: effectiveMaxWindowSize }, (_, i) => {
               return effectiveMaxWindowSize - i;
@@ -162,9 +163,9 @@ export default function MaxRangeTable({
                       ? 'bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-500'
                       : ''
                   }`}
-                  title={use4HHourlyMode ? `${windowSize} hour max range` : `${windowSize} minute max range`}
+                  title={resolution === '1h' ? `${windowSize} hour max range` : `${windowSize} minute max range`}
                 >
-                  {use4HHourlyMode ? `${windowSize}H` : `${windowSize}m`}
+                  {resolution === '1h' ? `${windowSize}H` : `${windowSize}m`}
                 </th>
               );
             })}
@@ -187,7 +188,7 @@ export default function MaxRangeTable({
               </td>
               <td
                 className={`px-4 py-4 text-right text-xs text-zinc-600 dark:text-zinc-400 bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-500`}
-                title={use4HHourlyMode ? `${highlightedColumn} hour max range` : `${highlightedColumn} minute max range`}
+                title={resolution === '1h' ? `${highlightedColumn} hour max range` : `${highlightedColumn} minute max range`}
               >
                 {(() => {
                   const range = item.maxRanges?.find(r => r.windowSize === highlightedColumn);
@@ -236,7 +237,7 @@ export default function MaxRangeTable({
                       ? 'bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-500'
                       : ''
                   }`}
-                  title={range ? (use4HHourlyMode ? `${windowSize} hour max range` : `${windowSize} minute max range`) : 'Insufficient data'}
+                  title={range ? (resolution === '1h' ? `${windowSize} hour max range` : `${windowSize} minute max range`) : 'Insufficient data'}
                 >
                   {range ? formatRangeDisplay(range, item.price, showMore, multiplier / 100) : '—'}
                 </td>

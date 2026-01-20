@@ -33,6 +33,7 @@ export interface BinancePrice {
   price: string;
   close15m?: string; // 15-minute candle close price
   close1h?: string; // 1-hour candle close price
+  close1d?: string; // 1-day candle close price
   candles1m?: Candle[]; // 1-minute candles (up to 60 or 600 depending on timeframe)
   candles1h?: Candle[]; // 1-hour candles (for 4H timeframe hourly mode)
   maxRanges?: MaxRange[]; // Max ranges for windows (15, 14, ..., 1 or 60, 59, ..., 1 depending on timeframe)

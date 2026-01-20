@@ -98,7 +98,12 @@ export default function PriceTableRow({
       </td>
       <td className="px-6 py-4 text-right text-sm text-zinc-600 dark:text-zinc-400">
         {(() => {
-          const closePrice = timeframe === '15m' ? item.close15m : item.close1h;
+          const closePrice =
+            timeframe === '15m'
+              ? item.close15m
+              : timeframe === '1d'
+              ? item.close1d
+              : item.close1h;
           return closePrice ? formatPrice(closePrice) : '—';
         })()}
       </td>
@@ -107,7 +112,12 @@ export default function PriceTableRow({
       </td>
       <td className="px-6 py-4 text-right text-sm font-medium">
         {(() => {
-          const closePrice = timeframe === '15m' ? item.close15m : item.close1h;
+          const closePrice =
+            timeframe === '15m'
+              ? item.close15m
+              : timeframe === '1d'
+              ? item.close1d
+              : item.close1h;
           const absoluteDeviation = calculateAbsoluteDeviation(item.price, closePrice);
           const percentageDeviation = calculateDeviation(item.price, closePrice);
           const deviationText = formatDeviationWithAbsolute(absoluteDeviation, percentageDeviation);
@@ -131,7 +141,12 @@ export default function PriceTableRow({
       </td>
       <td className="px-2 py-4 text-center">
         {(() => {
-          const closePrice = timeframe === '15m' ? item.close15m : item.close1h;
+          const closePrice =
+            timeframe === '15m'
+              ? item.close15m
+              : timeframe === '1d'
+              ? item.close1d
+              : item.close1h;
           const range = item.maxRanges?.find(r => r.windowSize === highlightedColumn);
           const absoluteDeviation = calculateAbsoluteDeviation(item.price, closePrice);
           const absDeviation = absoluteDeviation !== null ? Math.abs(absoluteDeviation) : 0;
@@ -166,7 +181,12 @@ export default function PriceTableRow({
       </td>
       <td className="px-6 py-4 text-right text-sm text-zinc-600 dark:text-zinc-400">
         {(() => {
-          const closePrice = timeframe === '15m' ? item.close15m : item.close1h;
+          const closePrice =
+            timeframe === '15m'
+              ? item.close15m
+              : timeframe === '1d'
+              ? item.close1d
+              : item.close1h;
           const range = item.maxRanges?.find(r => r.windowSize === highlightedColumn);
           
           if (!range || !closePrice) {
