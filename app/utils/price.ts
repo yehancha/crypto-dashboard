@@ -165,6 +165,12 @@ export function calculateMaxRangeForWindow(
   let maxLowStr = '';
   let weightedSum = 0;
   let weightSum = 0;
+  
+  // Change metrics
+  let sumAbsChange = 0;
+  let weightedAbsChangeSum = 0;
+  let maxAbsChange = 0;
+  let windowCount = 0;
 
   // Slide window through candle array
   for (let i = 0; i <= candles.length - windowSize; i++) {
@@ -199,10 +205,28 @@ export function calculateMaxRangeForWindow(
     const weight = i + 1;
     weightedSum += windowRange.range * weight;
     weightSum += weight;
+    
+    // Calculate change: close price of ending candle - open price of starting candle
+    const startOpen = parseFloat(windowCandles[0].open);
+    const endClose = parseFloat(windowCandles[windowSize - 1].close);
+    const change = endClose - startOpen;
+    const absChange = Math.abs(change);
+    
+    // Track change metrics
+    sumAbsChange += absChange;
+    weightedAbsChangeSum += absChange * weight;
+    if (absChange > maxAbsChange) {
+      maxAbsChange = absChange;
+    }
+    windowCount++;
   }
 
   // Calculate WMA
   const wma = weightSum > 0 ? weightedSum / weightSum : 0;
+  
+  // Calculate change metrics
+  const avgAbsChange = windowCount > 0 ? sumAbsChange / windowCount : 0;
+  const wmaAbsChange = weightSum > 0 ? weightedAbsChangeSum / weightSum : 0;
 
   return {
     windowSize,
@@ -210,6 +234,9 @@ export function calculateMaxRangeForWindow(
     high: maxHighStr,
     low: maxLowStr,
     wma,
+    avgAbsChange,
+    wmaAbsChange,
+    maxAbsChange,
   };
 }
 
@@ -236,6 +263,9 @@ export function calculateMaxRanges(candles: Candle[], maxWindowSize: number = 15
         high: '',
         low: '',
         wma: 0,
+        avgAbsChange: 0,
+        wmaAbsChange: 0,
+        maxAbsChange: 0,
       });
     }
   }
@@ -247,10 +277,11 @@ export function calculateMaxRanges(candles: Candle[], maxWindowSize: number = 15
  * Formats a range display showing high, low, range, and WMA
  * @param range MaxRange object to format
  * @param basePrice Optional base price for percentage calculation
- * @param showHighLow Whether to show high and low values (default: true)
+ * @param showHighLow Whether to show high and low values and change metrics (default: true)
+ * @param multiplier Optional multiplier to apply to change metrics (default 1.0)
  * @returns Formatted string like "H: 50000.00, L: 49000.00 (R: 1000.00, WMA: 950.00)" or "(R: 1000.00, WMA: 950.00)" if showHighLow is false
  */
-export function formatRangeDisplay(range: MaxRange, basePrice?: string, showHighLow: boolean = true): string {
+export function formatRangeDisplay(range: MaxRange, basePrice?: string, showHighLow: boolean = true, multiplier: number = 1.0): string {
   if (!range.high || !range.low || range.range === 0) {
     return '—';
   }
@@ -263,6 +294,14 @@ export function formatRangeDisplay(range: MaxRange, basePrice?: string, showHigh
     const highFormatted = formatPrice(range.high);
     const lowFormatted = formatPrice(range.low);
     result = `H: ${highFormatted}, L: ${lowFormatted} (R: ${rangeFormatted}, WMA: ${wmaFormatted})`;
+    
+    // Add change metrics when showHighLow is true
+    if (range.avgAbsChange !== undefined || range.wmaAbsChange !== undefined || range.maxAbsChange !== undefined) {
+      const avgChgFormatted = formatChange(range.avgAbsChange, multiplier);
+      const wmaChgFormatted = formatChange(range.wmaAbsChange, multiplier);
+      const maxChgFormatted = formatChange(range.maxAbsChange, multiplier);
+      result += ` | Avg Chg: ${avgChgFormatted}, WMA Chg: ${wmaChgFormatted}, Max Chg: ${maxChgFormatted}`;
+    }
   } else {
     result = `R: ${rangeFormatted}, WMA: ${wmaFormatted}`;
   }
@@ -307,6 +346,21 @@ export function formatWMA(wma: number | null | undefined, multiplier: number = 1
 
   const adjustedWMA = wma * multiplier;
   return formatPrice(adjustedWMA.toString());
+}
+
+/**
+ * Formats change value (average absolute change, WMA of absolute change, or max absolute change)
+ * @param change Change value or null/undefined
+ * @param multiplier Optional multiplier to apply to the change (default 1.0)
+ * @returns Formatted change value as string, or "—" if no change
+ */
+export function formatChange(change: number | null | undefined, multiplier: number = 1.0): string {
+  if (change === null || change === undefined || change === 0) {
+    return '—';
+  }
+
+  const adjustedChange = change * multiplier;
+  return formatPrice(adjustedChange.toString());
 }
 
 /**

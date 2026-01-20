@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { type BinancePrice } from '../../lib/binance';
 import { type TimeframeType } from '../../lib/timeframe';
 import { getTimeframeConfig } from '../../lib/timeframe';
-import { formatRangeDisplay, formatRangeOnly, formatWMA, getMinutesUntilNextInterval, getHighlightedColumn, shouldUse4HHourlyMode } from '../../utils/price';
+import { formatRangeDisplay, formatRangeOnly, formatWMA, formatChange, getMinutesUntilNextInterval, getHighlightedColumn, shouldUse4HHourlyMode } from '../../utils/price';
 
 type DisplayType = 'wma' | 'max-range';
 
@@ -196,12 +196,18 @@ export default function MaxRangeTable({
                   }
                   const rangeFormatted = formatRangeOnly(range, multiplier / 100);
                   const wmaFormatted = formatWMA(range.wma, multiplier / 100);
+                  const avgChgFormatted = formatChange(range.avgAbsChange, multiplier / 100);
+                  const wmaChgFormatted = formatChange(range.wmaAbsChange, multiplier / 100);
+                  const maxChgFormatted = formatChange(range.maxAbsChange, multiplier / 100);
                   
                   if (displayType === 'wma') {
                     return (
                       <div className="flex flex-col">
                         <span>R: {rangeFormatted}</span>
                         <span className="font-bold">WMA: {wmaFormatted}</span>
+                        <span>Avg Chg: {avgChgFormatted}</span>
+                        <span className="font-bold">WMA Chg: {wmaChgFormatted}</span>
+                        <span>Max Chg: {maxChgFormatted}</span>
                       </div>
                     );
                   } else {
@@ -209,6 +215,9 @@ export default function MaxRangeTable({
                       <div className="flex flex-col">
                         <span className="font-bold">R: {rangeFormatted}</span>
                         <span>WMA: {wmaFormatted}</span>
+                        <span className="font-bold">Avg Chg: {avgChgFormatted}</span>
+                        <span>WMA Chg: {wmaChgFormatted}</span>
+                        <span>Max Chg: {maxChgFormatted}</span>
                       </div>
                     );
                   }
@@ -229,7 +238,7 @@ export default function MaxRangeTable({
                   }`}
                   title={range ? (use4HHourlyMode ? `${windowSize} hour max range` : `${windowSize} minute max range`) : 'Insufficient data'}
                 >
-                  {range ? formatRangeDisplay(range, item.price, showMore) : '—'}
+                  {range ? formatRangeDisplay(range, item.price, showMore, multiplier / 100) : '—'}
                 </td>
               );
             })}

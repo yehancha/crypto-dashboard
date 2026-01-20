@@ -13,6 +13,9 @@ export interface MaxRange {
   high: string;
   low: string;
   wma?: number; // Weighted Moving Average
+  avgAbsChange?: number; // Average absolute change
+  wmaAbsChange?: number; // Weighted moving average of absolute change
+  maxAbsChange?: number; // Maximum absolute change
 }
 
 // Cache entry for a single window's range calculation
