@@ -1,6 +1,6 @@
 'use client';
 
-import { useLocalStorage } from '../../hooks/useLocalStorage';
+import { NOTIFY_THRESHOLD_AUTO } from '../../utils/price';
 
 interface NotificationConfigProps {
   yellowThreshold: number;
@@ -31,6 +31,7 @@ export default function NotificationConfig({
             {value}
           </option>
         ))}
+        <option value={NOTIFY_THRESHOLD_AUTO}>Auto</option>
       </select>
       <label className="text-sm text-zinc-600 dark:text-zinc-400">
         and Green:
@@ -46,6 +47,7 @@ export default function NotificationConfig({
             {value}
           </option>
         ))}
+        <option value={NOTIFY_THRESHOLD_AUTO}>Auto</option>
       </select>
     </div>
   );

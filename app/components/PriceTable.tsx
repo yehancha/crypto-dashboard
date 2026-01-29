@@ -5,7 +5,7 @@ import { useCryptoPrices } from '../hooks/useCryptoPrices';
 import { useNotifications } from '../hooks/useNotifications';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { type TimeframeType, getTimeframeConfig } from '../lib/timeframe';
-import { calculateHighlightingFlags, calculateDotCounts, getMinutesUntilNextInterval, getHighlightedColumn, getEffectiveResolution, type EffectiveResolution } from '../utils/price';
+import { calculateHighlightingFlags, calculateDotCounts, getMinutesUntilNextInterval, getHighlightedColumn, getEffectiveResolution, getNotificationMetPerSymbol, type EffectiveResolution } from '../utils/price';
 import SymbolInput from './PriceTable/SymbolInput';
 import TimeframeSelector from './PriceTable/TimeframeSelector';
 import NotificationConfig from './PriceTable/NotificationConfig';
@@ -111,13 +111,28 @@ export default function PriceTable() {
     return calculateHighlightingFlags(prices, displayType, multiplier, timeframe, highlightedColumn);
   }, [prices, displayType, multiplier, timeframe, highlightedColumn]);
 
-  // Calculate dot counts for notifications
+  // Calculate dot counts (unchanged; used for display only)
   const dotCounts = useMemo(() => {
     return calculateDotCounts(prices, multiplier, timeframe, highlightedColumn);
   }, [prices, multiplier, timeframe, highlightedColumn]);
 
-  // Track previous dot counts to detect when thresholds are newly met
-  const previousDotCountsRef = useRef<Record<string, { yellowDots: number; greenDots: number }>>({});
+  const timeLeftFraction = Math.min(1, Math.max(0, minutesRemaining / timeframeConfig.intervalMinutes));
+  const notificationMet = useMemo(
+    () =>
+      getNotificationMetPerSymbol(
+        prices,
+        multiplier,
+        timeframe,
+        highlightedColumn,
+        timeLeftFraction,
+        yellowThreshold,
+        greenThreshold
+      ),
+    [prices, multiplier, timeframe, highlightedColumn, timeLeftFraction, yellowThreshold, greenThreshold]
+  );
+
+  // Track previous "met" state per symbol to detect when thresholds are newly met
+  const previousMetRef = useRef<Record<string, boolean>>({});
   const isInitialRenderRef = useRef<boolean>(true);
 
   // Use notifications hook
@@ -128,41 +143,38 @@ export default function PriceTable() {
     // Skip notifications on initial render
     if (isInitialRenderRef.current) {
       isInitialRenderRef.current = false;
-      previousDotCountsRef.current = { ...dotCounts };
+      previousMetRef.current = Object.fromEntries(
+        Object.keys(notificationMet).map((symbol) => [symbol, notificationMet[symbol].yellowMet && notificationMet[symbol].greenMet])
+      );
       return;
     }
 
     // Skip if both thresholds are 0 (notifications disabled)
     if (yellowThreshold === 0 && greenThreshold === 0) {
-      previousDotCountsRef.current = { ...dotCounts };
+      previousMetRef.current = Object.fromEntries(
+        Object.keys(notificationMet).map((symbol) => [symbol, notificationMet[symbol].yellowMet && notificationMet[symbol].greenMet])
+      );
       return;
     }
 
-    const previousCounts = previousDotCountsRef.current;
-    const currentCounts = dotCounts;
+    const previousMet = previousMetRef.current;
 
     // Find symbols where thresholds are newly met
-    Object.keys(currentCounts).forEach((symbol) => {
-      const previous = previousCounts[symbol] || { yellowDots: 0, greenDots: 0 };
-      const current = currentCounts[symbol];
+    Object.keys(notificationMet).forEach((symbol) => {
+      const currentMet = notificationMet[symbol].yellowMet && notificationMet[symbol].greenMet;
+      const wasMet = previousMet[symbol] ?? false;
 
-      // Check if thresholds were previously met
-      const previousMet = previous.yellowDots >= yellowThreshold && previous.greenDots >= greenThreshold;
-      
-      // Check if thresholds are currently met
-      const currentMet = current.yellowDots >= yellowThreshold && current.greenDots >= greenThreshold;
-
-      // Notify only when transitioning from not-met to met
-      if (!previousMet && currentMet) {
+      if (!wasMet && currentMet) {
         notify(`${symbol} ${timeframeConfig.label}`, {
           body: 'Deviation exceeds expected range',
         }, 3);
       }
     });
 
-    // Update ref with current counts for next comparison
-    previousDotCountsRef.current = { ...currentCounts };
-  }, [dotCounts, yellowThreshold, greenThreshold, notify, timeframeConfig.label]);
+    previousMetRef.current = Object.fromEntries(
+      Object.keys(notificationMet).map((symbol) => [symbol, notificationMet[symbol].yellowMet && notificationMet[symbol].greenMet])
+    );
+  }, [notificationMet, yellowThreshold, greenThreshold, notify, timeframeConfig.label]);
 
   const handleAddSymbol = () => {
     const trimmedSymbol = newSymbol.trim().toUpperCase();

@@ -577,6 +577,9 @@ export function calculateHighlightingFlags(
   return flags;
 }
 
+/** Sentinel value for "Auto" notification threshold (dynamic bar from time left). */
+export const NOTIFY_THRESHOLD_AUTO = -1;
+
 /**
  * Calculates the number of filled dots (0-4) based on deviation to threshold ratio
  * @param deviation Absolute deviation value
@@ -652,4 +655,79 @@ export function calculateDotCounts(
   }
 
   return dotCounts;
+}
+
+/**
+ * Determines per-symbol whether the notification bar is met for Yellow and Green.
+ * Dot count logic is unchanged; this is used only for notification triggering.
+ * When threshold is Auto, "met" means deviation >= baseThreshold * timeLeftFraction.
+ * @param prices Array of price items with maxRanges
+ * @param multiplier Multiplier percentage (e.g., 100 for 100%)
+ * @param timeframe Timeframe type
+ * @param highlightedColumn The highlighted column window size
+ * @param timeLeftFraction Fraction of time left in candle (0–1)
+ * @param yellowThreshold 0–4 or NOTIFY_THRESHOLD_AUTO
+ * @param greenThreshold 0–4 or NOTIFY_THRESHOLD_AUTO
+ * @returns Record mapping symbol to { yellowMet, greenMet }
+ */
+export function getNotificationMetPerSymbol(
+  prices: Array<{ symbol: string; price: string; close15m?: string; close1h?: string; close1d?: string; maxRanges?: MaxRange[] }>,
+  multiplier: number,
+  timeframe: TimeframeType,
+  highlightedColumn: number,
+  timeLeftFraction: number,
+  yellowThreshold: number,
+  greenThreshold: number
+): Record<string, { yellowMet: boolean; greenMet: boolean }> {
+  const result: Record<string, { yellowMet: boolean; greenMet: boolean }> = {};
+  const multiplierRatio = multiplier / 100;
+
+  for (const item of prices) {
+    const closePrice =
+      timeframe === '15m'
+        ? item.close15m
+        : timeframe === '1d'
+        ? item.close1d
+        : item.close1h;
+    if (!closePrice) {
+      result[item.symbol] = { yellowMet: false, greenMet: false };
+      continue;
+    }
+
+    const range = item.maxRanges?.find(r => r.windowSize === highlightedColumn);
+    if (!range || range.range === 0) {
+      result[item.symbol] = { yellowMet: false, greenMet: false };
+      continue;
+    }
+
+    const wmaThreshold = (range.wma ?? 0) * multiplierRatio;
+    const maxRangeThreshold = range.range * multiplierRatio;
+
+    const currentPrice = parseFloat(item.price);
+    const closePriceNum = parseFloat(closePrice);
+    if (isNaN(currentPrice) || isNaN(closePriceNum)) {
+      result[item.symbol] = { yellowMet: false, greenMet: false };
+      continue;
+    }
+
+    const absoluteDeviation = Math.abs(currentPrice - closePriceNum);
+
+    const yellowMet =
+      yellowThreshold === 0
+        ? true
+        : yellowThreshold === NOTIFY_THRESHOLD_AUTO
+        ? absoluteDeviation >= wmaThreshold * timeLeftFraction
+        : getFilledDots(absoluteDeviation, wmaThreshold) >= yellowThreshold;
+
+    const greenMet =
+      greenThreshold === 0
+        ? true
+        : greenThreshold === NOTIFY_THRESHOLD_AUTO
+        ? absoluteDeviation >= maxRangeThreshold * timeLeftFraction
+        : getFilledDots(absoluteDeviation, maxRangeThreshold) >= greenThreshold;
+
+    result[item.symbol] = { yellowMet, greenMet };
+  }
+
+  return result;
 }
