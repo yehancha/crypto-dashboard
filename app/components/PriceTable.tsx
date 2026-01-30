@@ -29,7 +29,9 @@ export default function PriceTable() {
   const [showMore, setShowMore] = useLocalStorage<boolean>('crypto-dashboard-show-more', false);
   const [yellowThreshold, setYellowThreshold] = useLocalStorage<number>('crypto-dashboard-yellow-threshold', 0);
   const [greenThreshold, setGreenThreshold] = useLocalStorage<number>('crypto-dashboard-green-threshold', 0);
-  
+  const [maxVolatilityThreshold, setMaxVolatilityThreshold] = useLocalStorage<number>('crypto-dashboard-max-volatility-threshold', 0);
+  const [wmaVolatilityThreshold, setWmaVolatilityThreshold] = useLocalStorage<number>('crypto-dashboard-wma-volatility-threshold', 0);
+
   // Separate history storage for 4H and 1D hourly vs minute modes
   const [historyHours4HHourly, setHistoryHours4HHourly] = useLocalStorage<number>('crypto-dashboard-history-hours-4h-hourly', 168);
   const [historyHours4HMinute, setHistoryHours4HMinute] = useLocalStorage<number>('crypto-dashboard-history-hours-4h-minute', 12);
@@ -145,9 +147,11 @@ export default function PriceTable() {
         highlightedColumn,
         timeLeftFraction,
         yellowThreshold,
-        greenThreshold
+        greenThreshold,
+        maxVolatilityThreshold,
+        wmaVolatilityThreshold
       ),
-    [prices, multiplier, timeframe, highlightedColumn, timeLeftFraction, yellowThreshold, greenThreshold]
+    [prices, multiplier, timeframe, highlightedColumn, timeLeftFraction, yellowThreshold, greenThreshold, maxVolatilityThreshold, wmaVolatilityThreshold]
   );
 
   // Track previous "met" state per symbol to detect when thresholds are newly met
@@ -250,19 +254,27 @@ export default function PriceTable() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black p-8">
       <div className="w-full max-w-full">
-        <div className="mb-8 flex items-center justify-between">
-          <h1 className="text-3xl font-semibold text-black dark:text-zinc-50">
-            Crypto Prices
-          </h1>
+        <div className="mb-8 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h1 className="text-3xl font-semibold text-black dark:text-zinc-50">
+              Crypto Prices
+            </h1>
+            <div className="flex items-center gap-4">
+              <CandleCountdown timeframe={timeframe} />
+              <TimeframeSelector value={timeframe} onChange={setTimeframe} />
+            </div>
+          </div>
           <div className="flex items-center gap-4">
-            <CandleCountdown timeframe={timeframe} />
             <NotificationConfig
               yellowThreshold={yellowThreshold}
               greenThreshold={greenThreshold}
               onYellowThresholdChange={setYellowThreshold}
               onGreenThresholdChange={setGreenThreshold}
+              maxVolatilityThreshold={maxVolatilityThreshold}
+              wmaVolatilityThreshold={wmaVolatilityThreshold}
+              onMaxVolatilityThresholdChange={setMaxVolatilityThreshold}
+              onWmaVolatilityThresholdChange={setWmaVolatilityThreshold}
             />
-            <TimeframeSelector value={timeframe} onChange={setTimeframe} />
           </div>
         </div>
 

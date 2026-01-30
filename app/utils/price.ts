@@ -128,9 +128,10 @@ export function pruneWindowRangeCache(cache: WindowRangeCache, candles: Candle[]
 }
 
 /**
- * Calculates high, low, and range for a single window of candles
+ * Calculates high, low, range, and volatility for a single window of candles
+ * Volatility = sum(high - low) / range for the window
  * @param candles Array of candles in the window
- * @returns CachedWindowRange with high, low, and range
+ * @returns CachedWindowRange with high, low, range, and volatility
  */
 function calculateWindowRange(candles: Candle[]): CachedWindowRange {
   const highs = candles.map(c => parseFloat(c.high));
@@ -139,8 +140,11 @@ function calculateWindowRange(candles: Candle[]): CachedWindowRange {
   const high = Math.max(...highs);
   const low = Math.min(...lows);
   const range = high - low;
+
+  const sumHL = candles.reduce((acc, c) => acc + (parseFloat(c.high) - parseFloat(c.low)), 0);
+  const volatility = range > 0 ? sumHL / range : 0;
   
-  return { high, low, range };
+  return { high, low, range, volatility };
 }
 
 /**
@@ -166,6 +170,8 @@ export function calculateMaxRangeForWindow(
   let maxLowStr = '';
   let weightedSum = 0;
   let weightSum = 0;
+  let maxVolatility = 0;
+  let weightedVolatilitySum = 0;
   
   // Change metrics
   let sumAbsChange = 0;
@@ -206,6 +212,8 @@ export function calculateMaxRangeForWindow(
     const weight = i + 1;
     weightedSum += windowRange.range * weight;
     weightSum += weight;
+    maxVolatility = Math.max(maxVolatility, windowRange.volatility);
+    weightedVolatilitySum += windowRange.volatility * weight;
     
     // Calculate change: close price of ending candle - open price of starting candle
     const startOpen = parseFloat(windowCandles[0].open);
@@ -224,6 +232,7 @@ export function calculateMaxRangeForWindow(
 
   // Calculate WMA
   const wma = weightSum > 0 ? weightedSum / weightSum : 0;
+  const wmaVolatility = weightSum > 0 ? weightedVolatilitySum / weightSum : 0;
   
   // Calculate change metrics
   const avgAbsChange = windowCount > 0 ? sumAbsChange / windowCount : 0;
@@ -238,6 +247,8 @@ export function calculateMaxRangeForWindow(
     avgAbsChange,
     wmaAbsChange,
     maxAbsChange,
+    maxVolatility,
+    wmaVolatility,
   };
 }
 
@@ -267,6 +278,8 @@ export function calculateMaxRanges(candles: Candle[], maxWindowSize: number = 15
         avgAbsChange: 0,
         wmaAbsChange: 0,
         maxAbsChange: 0,
+        maxVolatility: 0,
+        wmaVolatility: 0,
       });
     }
   }
@@ -305,6 +318,13 @@ export function formatRangeDisplay(range: MaxRange, basePrice?: string, showHigh
     }
   } else {
     result = `R: ${rangeFormatted}, WMA: ${wmaFormatted}`;
+  }
+
+  // Add volatility when present
+  if (range.maxVolatility !== undefined || range.wmaVolatility !== undefined) {
+    const maxVolStr = formatVolatility(range.maxVolatility);
+    const wmaVolStr = formatVolatility(range.wmaVolatility);
+    result += ` | Max Vol: ${maxVolStr}, WMA Vol: ${wmaVolStr}`;
   }
 
   // Add percentage if base price is provided
@@ -347,6 +367,18 @@ export function formatWMA(wma: number | null | undefined, multiplier: number = 1
 
   const adjustedWMA = wma * multiplier;
   return formatPrice(adjustedWMA.toString());
+}
+
+/**
+ * Formats volatility (ratio: sum(high-low)/range)
+ * @param value Volatility value or null/undefined
+ * @returns Formatted string with 2-3 decimal places, or "—" if no value
+ */
+export function formatVolatility(value: number | null | undefined): string {
+  if (value === null || value === undefined || value === 0) {
+    return '—';
+  }
+  return value.toFixed(3);
 }
 
 /**
@@ -668,6 +700,8 @@ export function calculateDotCounts(
  * @param timeLeftFraction Fraction of time left in candle (0–1)
  * @param yellowThreshold 0–4 or NOTIFY_THRESHOLD_AUTO
  * @param greenThreshold 0–4 or NOTIFY_THRESHOLD_AUTO
+ * @param maxVolatilityThreshold 0–10; 0 = do not filter; otherwise notification only when maxVolatility >= this value
+ * @param wmaVolatilityThreshold 0–10; 0 = do not filter; otherwise notification only when wmaVolatility >= this value
  * @returns Record mapping symbol to { yellowMet, greenMet }
  */
 export function getNotificationMetPerSymbol(
@@ -677,7 +711,9 @@ export function getNotificationMetPerSymbol(
   highlightedColumn: number,
   timeLeftFraction: number,
   yellowThreshold: number,
-  greenThreshold: number
+  greenThreshold: number,
+  maxVolatilityThreshold: number,
+  wmaVolatilityThreshold: number
 ): Record<string, { yellowMet: boolean; greenMet: boolean }> {
   const result: Record<string, { yellowMet: boolean; greenMet: boolean }> = {};
   const multiplierRatio = multiplier / 100;
@@ -712,19 +748,29 @@ export function getNotificationMetPerSymbol(
 
     const absoluteDeviation = Math.abs(currentPrice - closePriceNum);
 
-    const yellowMet =
+    let yellowMet =
       yellowThreshold === 0
         ? true
         : yellowThreshold === NOTIFY_THRESHOLD_AUTO
         ? absoluteDeviation >= wmaThreshold * timeLeftFraction
         : getFilledDots(absoluteDeviation, wmaThreshold) >= yellowThreshold;
 
-    const greenMet =
+    let greenMet =
       greenThreshold === 0
         ? true
         : greenThreshold === NOTIFY_THRESHOLD_AUTO
         ? absoluteDeviation >= maxRangeThreshold * timeLeftFraction
         : getFilledDots(absoluteDeviation, maxRangeThreshold) >= greenThreshold;
+
+    // Volatility filters: notification only when volatility >= threshold (0 = do not consider)
+    if (maxVolatilityThreshold > 0 && (range.maxVolatility ?? 0) < maxVolatilityThreshold) {
+      yellowMet = false;
+      greenMet = false;
+    }
+    if (wmaVolatilityThreshold > 0 && (range.wmaVolatility ?? 0) < wmaVolatilityThreshold) {
+      yellowMet = false;
+      greenMet = false;
+    }
 
     result[item.symbol] = { yellowMet, greenMet };
   }
