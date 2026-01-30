@@ -92,7 +92,26 @@ export default function PriceTable() {
   const [newSymbol, setNewSymbol] = useState('');
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  
+  const [notifiedSymbols, setNotifiedSymbols] = useState<Set<string>>(new Set());
+  const [notedSymbols, setNotedSymbols] = useState<Set<string>>(new Set());
+
+  const handleNotificationCellClick = useCallback((symbol: string) => {
+    if (notedSymbols.has(symbol)) {
+      setNotifiedSymbols((prev) => {
+        const next = new Set(prev);
+        next.delete(symbol);
+        return next;
+      });
+      setNotedSymbols((prev) => {
+        const next = new Set(prev);
+        next.delete(symbol);
+        return next;
+      });
+    } else {
+      setNotedSymbols((prev) => new Set(prev).add(symbol));
+    }
+  }, [notedSymbols]);
+
   // Calculate highlighted column based on timeframe and mode
   const effectiveMaxWindowSize =
     timeframe === '4h'
@@ -165,16 +184,19 @@ export default function PriceTable() {
       const wasMet = previousMet[symbol] ?? false;
 
       if (!wasMet && currentMet) {
-        notify(`${symbol} ${timeframeConfig.label}`, {
-          body: 'Deviation exceeds expected range',
-        }, 3);
+        if (!notedSymbols.has(symbol)) {
+          notify(`${symbol} ${timeframeConfig.label}`, {
+            body: 'Deviation exceeds expected range',
+          }, 3);
+          setNotifiedSymbols((prev) => new Set(prev).add(symbol));
+        }
       }
     });
 
     previousMetRef.current = Object.fromEntries(
       Object.keys(notificationMet).map((symbol) => [symbol, notificationMet[symbol].yellowMet && notificationMet[symbol].greenMet])
     );
-  }, [notificationMet, yellowThreshold, greenThreshold, notify, timeframeConfig.label]);
+  }, [notificationMet, yellowThreshold, greenThreshold, notify, timeframeConfig.label, notedSymbols]);
 
   const handleAddSymbol = () => {
     const trimmedSymbol = newSymbol.trim().toUpperCase();
@@ -276,6 +298,14 @@ export default function PriceTable() {
                     highlightedColumn={highlightedColumn}
                     multiplier={multiplier}
                     displayType={displayType}
+                    notificationState={
+                      !notifiedSymbols.has(item.symbol)
+                        ? 'none'
+                        : notedSymbols.has(item.symbol)
+                          ? 'noted'
+                          : 'tick'
+                    }
+                    onNotificationCellClick={handleNotificationCellClick}
                   />
                 ))
               )}
