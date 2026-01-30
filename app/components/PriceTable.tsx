@@ -5,7 +5,7 @@ import { useCryptoPrices } from '../hooks/useCryptoPrices';
 import { useNotifications } from '../hooks/useNotifications';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { type TimeframeType, getTimeframeConfig } from '../lib/timeframe';
-import { calculateHighlightingFlags, calculateDotCounts, getMinutesUntilNextInterval, getHighlightedColumn, getEffectiveResolution, getNotificationMetPerSymbol, type EffectiveResolution } from '../utils/price';
+import { calculateHighlightingFlags, calculateDotCounts, getMinutesUntilNextInterval, getHighlightedColumn, getEffectiveResolution, getNotificationMetPerSymbol, MULTIPLIER_VOLATILITY, type EffectiveResolution } from '../utils/price';
 import SymbolInput from './PriceTable/SymbolInput';
 import TimeframeSelector from './PriceTable/TimeframeSelector';
 import NotificationConfig from './PriceTable/NotificationConfig';
@@ -25,7 +25,7 @@ type DisplayType = 'wma' | 'max-range';
 export default function PriceTable() {
   const [timeframe, setTimeframe] = useLocalStorage<TimeframeType>('crypto-dashboard-timeframe', '15m');
   const [displayType, setDisplayType] = useLocalStorage<DisplayType>('crypto-dashboard-display-type', 'max-range');
-  const [multiplier, setMultiplier] = useLocalStorage<number>('crypto-dashboard-multiplier', 100);
+  const [multiplier, setMultiplier] = useLocalStorage<number>('crypto-dashboard-multiplier', MULTIPLIER_VOLATILITY);
   const [showMore, setShowMore] = useLocalStorage<boolean>('crypto-dashboard-show-more', false);
   const [yellowThreshold, setYellowThreshold] = useLocalStorage<number>('crypto-dashboard-yellow-threshold', 0);
   const [greenThreshold, setGreenThreshold] = useLocalStorage<number>('crypto-dashboard-green-threshold', 0);

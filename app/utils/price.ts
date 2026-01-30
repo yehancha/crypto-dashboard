@@ -292,16 +292,21 @@ export function calculateMaxRanges(candles: Candle[], maxWindowSize: number = 15
  * @param range MaxRange object to format
  * @param basePrice Optional base price for percentage calculation
  * @param showHighLow Whether to show high and low values and change metrics (default: true)
- * @param multiplier Optional multiplier to apply to change metrics (default 1.0)
+ * @param multiplier Multiplier for change metrics; when useVolatilityMultipliers is true, R/WMA use volatility (default 1.0)
+ * @param useVolatilityMultipliers When true, display R as range*maxVolatility and WMA as wma*wmaVolatility (default false)
  * @returns Formatted string like "H: 50000.00, L: 49000.00 (R: 1000.00, WMA: 950.00)" or "(R: 1000.00, WMA: 950.00)" if showHighLow is false
  */
-export function formatRangeDisplay(range: MaxRange, basePrice?: string, showHighLow: boolean = true, multiplier: number = 1.0): string {
+export function formatRangeDisplay(range: MaxRange, basePrice?: string, showHighLow: boolean = true, multiplier: number = 1.0, useVolatilityMultipliers: boolean = false): string {
   if (!range.high || !range.low || range.range === 0) {
     return '—';
   }
 
-  const rangeFormatted = formatPrice(range.range.toString());
-  const wmaFormatted = formatWMA(range.wma);
+  const rangeVal = useVolatilityMultipliers ? range.range * (range.maxVolatility ?? 0) : range.range;
+  const wmaVal = useVolatilityMultipliers ? (range.wma ?? 0) * (range.wmaVolatility ?? 0) : (range.wma ?? 0);
+  const rangeFormatted = formatPrice(rangeVal.toString());
+  const wmaFormatted = formatWMA(wmaVal, 1);
+
+  const changeMultiplier = useVolatilityMultipliers ? 1 : multiplier;
 
   let result: string;
   if (showHighLow) {
@@ -311,9 +316,9 @@ export function formatRangeDisplay(range: MaxRange, basePrice?: string, showHigh
     
     // Add change metrics when showHighLow is true
     if (range.avgAbsChange !== undefined || range.wmaAbsChange !== undefined || range.maxAbsChange !== undefined) {
-      const avgChgFormatted = formatChange(range.avgAbsChange, multiplier);
-      const wmaChgFormatted = formatChange(range.wmaAbsChange, multiplier);
-      const maxChgFormatted = formatChange(range.maxAbsChange, multiplier);
+      const avgChgFormatted = formatChange(range.avgAbsChange, changeMultiplier);
+      const wmaChgFormatted = formatChange(range.wmaAbsChange, changeMultiplier);
+      const maxChgFormatted = formatChange(range.maxAbsChange, changeMultiplier);
       result += ` | Avg Chg: ${avgChgFormatted}, WMA Chg: ${wmaChgFormatted}, Max Chg: ${maxChgFormatted}`;
     }
   } else {
@@ -327,11 +332,12 @@ export function formatRangeDisplay(range: MaxRange, basePrice?: string, showHigh
     result += ` | Max Vol: ${maxVolStr}, WMA Vol: ${wmaVolStr}`;
   }
 
-  // Add percentage if base price is provided
+  // Add percentage if base price is provided (use displayed range value when volatility multipliers)
   if (basePrice) {
     const base = parseFloat(basePrice);
     if (!isNaN(base) && base !== 0) {
-      const percentage = (range.range / base) * 100;
+      const pctVal = useVolatilityMultipliers ? rangeVal : range.range;
+      const percentage = (pctVal / base) * 100;
       result += ` (${percentage >= 0 ? '+' : ''}${percentage.toFixed(2)}%)`;
     }
   }
@@ -555,7 +561,6 @@ export function calculateHighlightingFlags(
   highlightedColumn: number
 ): Record<string, 'yellow' | 'green' | null> {
   const flags: Record<string, 'yellow' | 'green' | null> = {};
-  const multiplierRatio = multiplier / 100;
 
   for (const item of prices) {
     // Get the close price based on timeframe
@@ -577,9 +582,9 @@ export function calculateHighlightingFlags(
       continue;
     }
 
-    // Calculate both thresholds independently
-    const wmaThreshold = (range.wma ?? 0) * multiplierRatio;
-    const maxRangeThreshold = range.range * multiplierRatio;
+    const { wmaRatio, rangeRatio } = getThresholdMultipliers(range, multiplier);
+    const wmaThreshold = (range.wma ?? 0) * wmaRatio;
+    const maxRangeThreshold = range.range * rangeRatio;
 
     if (wmaThreshold === 0 && maxRangeThreshold === 0) {
       flags[item.symbol] = null;
@@ -612,6 +617,24 @@ export function calculateHighlightingFlags(
 /** Sentinel value for "Auto" notification threshold (dynamic bar from time left). */
 export const NOTIFY_THRESHOLD_AUTO = -1;
 
+/** Sentinel value for Multiplier dropdown: use volatility (max-range * maxVolatility, wma * wmaVolatility). */
+export const MULTIPLIER_VOLATILITY = -1;
+
+/**
+ * Returns effective ratios for WMA and max-range thresholds.
+ * When multiplier is MULTIPLIER_VOLATILITY, uses range's wmaVolatility and maxVolatility; otherwise multiplier/100.
+ */
+export function getThresholdMultipliers(range: MaxRange, multiplier: number): { wmaRatio: number; rangeRatio: number } {
+  if (multiplier === MULTIPLIER_VOLATILITY) {
+    return {
+      wmaRatio: range.wmaVolatility ?? 0,
+      rangeRatio: range.maxVolatility ?? 0,
+    };
+  }
+  const ratio = multiplier / 100;
+  return { wmaRatio: ratio, rangeRatio: ratio };
+}
+
 /**
  * Calculates the number of filled dots (0-4) based on deviation to threshold ratio
  * @param deviation Absolute deviation value
@@ -643,7 +666,6 @@ export function calculateDotCounts(
   highlightedColumn: number
 ): Record<string, { yellowDots: number; greenDots: number }> {
   const dotCounts: Record<string, { yellowDots: number; greenDots: number }> = {};
-  const multiplierRatio = multiplier / 100;
 
   for (const item of prices) {
     // Get the close price based on timeframe
@@ -665,9 +687,9 @@ export function calculateDotCounts(
       continue;
     }
 
-    // Calculate both thresholds independently
-    const wmaThreshold = (range.wma ?? 0) * multiplierRatio;
-    const maxRangeThreshold = range.range * multiplierRatio;
+    const { wmaRatio, rangeRatio } = getThresholdMultipliers(range, multiplier);
+    const wmaThreshold = (range.wma ?? 0) * wmaRatio;
+    const maxRangeThreshold = range.range * rangeRatio;
 
     // Calculate absolute deviation
     const currentPrice = parseFloat(item.price);
@@ -716,7 +738,6 @@ export function getNotificationMetPerSymbol(
   wmaVolatilityThreshold: number
 ): Record<string, { yellowMet: boolean; greenMet: boolean }> {
   const result: Record<string, { yellowMet: boolean; greenMet: boolean }> = {};
-  const multiplierRatio = multiplier / 100;
 
   for (const item of prices) {
     const closePrice =
@@ -736,8 +757,9 @@ export function getNotificationMetPerSymbol(
       continue;
     }
 
-    const wmaThreshold = (range.wma ?? 0) * multiplierRatio;
-    const maxRangeThreshold = range.range * multiplierRatio;
+    const { wmaRatio, rangeRatio } = getThresholdMultipliers(range, multiplier);
+    const wmaThreshold = (range.wma ?? 0) * wmaRatio;
+    const maxRangeThreshold = range.range * rangeRatio;
 
     const currentPrice = parseFloat(item.price);
     const closePriceNum = parseFloat(closePrice);

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { type BinancePrice } from '../../lib/binance';
 import { type TimeframeType } from '../../lib/timeframe';
 import { getTimeframeConfig } from '../../lib/timeframe';
-import { formatRangeDisplay, formatRangeOnly, formatWMA, formatChange, getMinutesUntilNextInterval, getHighlightedColumn, getEffectiveResolution, getEffectiveMaxWindowSize, type EffectiveResolution } from '../../utils/price';
+import { formatRangeDisplay, formatRangeOnly, formatWMA, formatChange, formatVolatility, MULTIPLIER_VOLATILITY, getMinutesUntilNextInterval, getHighlightedColumn, getEffectiveResolution, getEffectiveMaxWindowSize, type EffectiveResolution } from '../../utils/price';
 
 type DisplayType = 'wma' | 'max-range';
 
@@ -129,6 +129,7 @@ export default function MaxRangeTable({
               onChange={(e) => onMultiplierChange(Number(e.target.value))}
               className="px-3 py-1.5 text-sm rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
+              <option value={MULTIPLIER_VOLATILITY}>Volatility</option>
               {multiplierOptions.map((value) => (
                 <option key={value} value={value}>
                   {value}%
@@ -195,11 +196,14 @@ export default function MaxRangeTable({
                   if (!range || range.range === 0) {
                     return '—';
                   }
-                  const rangeFormatted = formatRangeOnly(range, multiplier / 100);
-                  const wmaFormatted = formatWMA(range.wma, multiplier / 100);
-                  const avgChgFormatted = formatChange(range.avgAbsChange, multiplier / 100);
-                  const wmaChgFormatted = formatChange(range.wmaAbsChange, multiplier / 100);
-                  const maxChgFormatted = formatChange(range.maxAbsChange, multiplier / 100);
+                  const rangeRatio = multiplier === MULTIPLIER_VOLATILITY ? (range.maxVolatility ?? 0) : multiplier / 100;
+                  const wmaRatio = multiplier === MULTIPLIER_VOLATILITY ? (range.wmaVolatility ?? 0) : multiplier / 100;
+                  const chgMultiplier = multiplier === MULTIPLIER_VOLATILITY ? 1 : multiplier / 100;
+                  const rangeFormatted = formatRangeOnly(range, rangeRatio);
+                  const wmaFormatted = formatWMA(range.wma, wmaRatio);
+                  const avgChgFormatted = formatChange(range.avgAbsChange, chgMultiplier);
+                  const wmaChgFormatted = formatChange(range.wmaAbsChange, chgMultiplier);
+                  const maxChgFormatted = formatChange(range.maxAbsChange, chgMultiplier);
                   
                   if (displayType === 'wma') {
                     return (
@@ -209,6 +213,8 @@ export default function MaxRangeTable({
                         <span>Avg Chg: {avgChgFormatted}</span>
                         <span className="font-bold">WMA Chg: {wmaChgFormatted}</span>
                         <span>Max Chg: {maxChgFormatted}</span>
+                        <span>Max Vol: {formatVolatility(range.maxVolatility)}</span>
+                        <span>WMA Vol: {formatVolatility(range.wmaVolatility)}</span>
                       </div>
                     );
                   } else {
@@ -219,6 +225,8 @@ export default function MaxRangeTable({
                         <span className="font-bold">Avg Chg: {avgChgFormatted}</span>
                         <span>WMA Chg: {wmaChgFormatted}</span>
                         <span>Max Chg: {maxChgFormatted}</span>
+                        <span>Max Vol: {formatVolatility(range.maxVolatility)}</span>
+                        <span>WMA Vol: {formatVolatility(range.wmaVolatility)}</span>
                       </div>
                     );
                   }
@@ -239,7 +247,7 @@ export default function MaxRangeTable({
                   }`}
                   title={range ? (resolution === '1h' ? `${windowSize} hour max range` : `${windowSize} minute max range`) : 'Insufficient data'}
                 >
-                  {range ? formatRangeDisplay(range, item.price, showMore, multiplier / 100) : '—'}
+                  {range ? formatRangeDisplay(range, item.price, showMore, multiplier === MULTIPLIER_VOLATILITY ? 1 : multiplier / 100, multiplier === MULTIPLIER_VOLATILITY) : '—'}
                 </td>
               );
             })}
