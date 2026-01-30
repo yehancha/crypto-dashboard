@@ -16,6 +16,8 @@ export interface MaxRange {
   avgAbsChange?: number; // Average absolute change
   wmaAbsChange?: number; // Weighted moving average of absolute change
   maxAbsChange?: number; // Maximum absolute change
+  maxVolatility?: number; // Maximum per-window volatility (sum(high-low)/range)
+  wmaVolatility?: number; // WMA of per-window volatilities
 }
 
 // Cache entry for a single window's range calculation
@@ -23,6 +25,7 @@ export interface CachedWindowRange {
   high: number;
   low: number;
   range: number;
+  volatility: number; // sum(high-low) / range for this window
 }
 
 // Cache for window range calculations, keyed by "<windowSize>-<firstCandleOpenTime>"
