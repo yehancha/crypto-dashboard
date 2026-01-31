@@ -129,7 +129,7 @@ export function pruneWindowRangeCache(cache: WindowRangeCache, candles: Candle[]
 
 /**
  * Calculates high, low, range, and volatility for a single window of candles
- * Volatility = sum(high - low) / range for the window
+ * Volatility = sum((high - low) * 2 - abs(close - open)) / range for the window
  * @param candles Array of candles in the window
  * @returns CachedWindowRange with high, low, range, and volatility
  */
@@ -141,8 +141,14 @@ function calculateWindowRange(candles: Candle[]): CachedWindowRange {
   const low = Math.min(...lows);
   const range = high - low;
 
-  const sumHL = candles.reduce((acc, c) => acc + (parseFloat(c.high) - parseFloat(c.low)), 0);
-  const volatility = range > 0 ? sumHL / range : 0;
+  const sumVol = candles.reduce((acc, c) => {
+    const h = parseFloat(c.high);
+    const l = parseFloat(c.low);
+    const o = parseFloat(c.open);
+    const cl = parseFloat(c.close);
+    return acc + ((h - l) * 2 - Math.abs(cl - o));
+  }, 0);
+  const volatility = range > 0 ? sumVol / range : 0;
   
   return { high, low, range, volatility };
 }
@@ -376,7 +382,7 @@ export function formatWMA(wma: number | null | undefined, multiplier: number = 1
 }
 
 /**
- * Formats volatility (ratio: sum(high-low)/range)
+ * Formats volatility (ratio: sum((high-low)*2 - abs(close-open)) / range)
  * @param value Volatility value or null/undefined
  * @returns Formatted string with 2-3 decimal places, or "—" if no value
  */
