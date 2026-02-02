@@ -557,6 +557,7 @@ export function shouldUse4HHourlyMode(timeframe: string, minutesUntilExpiry: num
  * @param multiplier Multiplier percentage (e.g., 100 for 100%)
  * @param timeframe Timeframe type: '15m' or '1h'
  * @param highlightedColumn The highlighted column window size
+ * @param mainTableScale Scale for sub-minute accuracy (seconds_remaining / window_seconds); default 1
  * @returns Record mapping symbol to 'yellow' | 'green' | null indicating highlight color
  */
 export function calculateHighlightingFlags(
@@ -564,7 +565,8 @@ export function calculateHighlightingFlags(
   displayType: 'wma' | 'max-range',
   multiplier: number,
   timeframe: TimeframeType,
-  highlightedColumn: number
+  highlightedColumn: number,
+  mainTableScale: number = 1
 ): Record<string, 'yellow' | 'green' | null> {
   const flags: Record<string, 'yellow' | 'green' | null> = {};
 
@@ -589,8 +591,8 @@ export function calculateHighlightingFlags(
     }
 
     const { wmaRatio, rangeRatio } = getThresholdMultipliers(range, multiplier);
-    const wmaThreshold = (range.wma ?? 0) * wmaRatio;
-    const maxRangeThreshold = range.range * rangeRatio;
+    const wmaThreshold = (range.wma ?? 0) * wmaRatio * mainTableScale;
+    const maxRangeThreshold = range.range * rangeRatio * mainTableScale;
 
     if (wmaThreshold === 0 && maxRangeThreshold === 0) {
       flags[item.symbol] = null;
@@ -663,13 +665,15 @@ export function getFilledDots(deviation: number, threshold: number): number {
  * @param multiplier Multiplier percentage (e.g., 100 for 100%)
  * @param timeframe Timeframe type: '15m' or '1h'
  * @param highlightedColumn The highlighted column window size
+ * @param mainTableScale Scale for sub-minute accuracy (seconds_remaining / window_seconds); default 1
  * @returns Record mapping symbol to object with yellowDots and greenDots (0-4)
  */
 export function calculateDotCounts(
   prices: Array<{ symbol: string; price: string; close15m?: string; close1h?: string; close1d?: string; maxRanges?: MaxRange[] }>,
   multiplier: number,
   timeframe: TimeframeType,
-  highlightedColumn: number
+  highlightedColumn: number,
+  mainTableScale: number = 1
 ): Record<string, { yellowDots: number; greenDots: number }> {
   const dotCounts: Record<string, { yellowDots: number; greenDots: number }> = {};
 
@@ -694,8 +698,8 @@ export function calculateDotCounts(
     }
 
     const { wmaRatio, rangeRatio } = getThresholdMultipliers(range, multiplier);
-    const wmaThreshold = (range.wma ?? 0) * wmaRatio;
-    const maxRangeThreshold = range.range * rangeRatio;
+    const wmaThreshold = (range.wma ?? 0) * wmaRatio * mainTableScale;
+    const maxRangeThreshold = range.range * rangeRatio * mainTableScale;
 
     // Calculate absolute deviation
     const currentPrice = parseFloat(item.price);
@@ -730,6 +734,7 @@ export function calculateDotCounts(
  * @param greenThreshold 0–4 or NOTIFY_THRESHOLD_AUTO
  * @param maxVolatilityThreshold 0–10; 0 = do not filter; otherwise notification only when maxVolatility >= this value
  * @param wmaVolatilityThreshold 0–10; 0 = do not filter; otherwise notification only when wmaVolatility >= this value
+ * @param mainTableScale Scale for sub-minute accuracy (seconds_remaining / window_seconds); default 1
  * @returns Record mapping symbol to { yellowMet, greenMet }
  */
 export function getNotificationMetPerSymbol(
@@ -741,7 +746,8 @@ export function getNotificationMetPerSymbol(
   yellowThreshold: number,
   greenThreshold: number,
   maxVolatilityThreshold: number,
-  wmaVolatilityThreshold: number
+  wmaVolatilityThreshold: number,
+  mainTableScale: number = 1
 ): Record<string, { yellowMet: boolean; greenMet: boolean }> {
   const result: Record<string, { yellowMet: boolean; greenMet: boolean }> = {};
 
@@ -764,8 +770,8 @@ export function getNotificationMetPerSymbol(
     }
 
     const { wmaRatio, rangeRatio } = getThresholdMultipliers(range, multiplier);
-    const wmaThreshold = (range.wma ?? 0) * wmaRatio;
-    const maxRangeThreshold = range.range * rangeRatio;
+    const wmaThreshold = (range.wma ?? 0) * wmaRatio * mainTableScale;
+    const maxRangeThreshold = range.range * rangeRatio * mainTableScale;
 
     const currentPrice = parseFloat(item.price);
     const closePriceNum = parseFloat(closePrice);

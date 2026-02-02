@@ -21,6 +21,7 @@ interface PriceTableRowProps {
   highlightColor?: 'yellow' | 'green' | null;
   highlightedColumn: number;
   multiplier: number;
+  mainTableScale?: number;
   displayType: DisplayType;
   notificationState?: 'none' | 'tick' | 'noted';
   onNotificationCellClick?: (symbol: string) => void;
@@ -41,6 +42,7 @@ export default function PriceTableRow({
   highlightColor = null,
   highlightedColumn,
   multiplier,
+  mainTableScale = 1,
   displayType,
   notificationState = 'none',
   onNotificationCellClick,
@@ -193,8 +195,8 @@ export default function PriceTableRow({
           const absDeviation = absoluteDeviation !== null ? Math.abs(absoluteDeviation) : 0;
           
           const { wmaRatio, rangeRatio } = range ? getThresholdMultipliers(range, multiplier) : { wmaRatio: 0, rangeRatio: 0 };
-          const wmaThreshold = (range?.wma ?? 0) * wmaRatio;
-          const maxRangeThreshold = (range?.range ?? 0) * rangeRatio;
+          const wmaThreshold = (range?.wma ?? 0) * wmaRatio * mainTableScale;
+          const maxRangeThreshold = (range?.range ?? 0) * rangeRatio * mainTableScale;
           
           // Calculate how many dots to color based on WMA (yellow) and max-range (green)
           const yellowDots = getFilledDots(absDeviation, wmaThreshold);
@@ -243,13 +245,14 @@ export default function PriceTableRow({
               return '—';
             }
             
-            const wmaFormatted = formatWMA(range.wma, wmaRatio);
+            const effectiveWmaRatio = wmaRatio * mainTableScale;
+            const wmaFormatted = formatWMA(range.wma, effectiveWmaRatio);
             
             if (isNaN(closePriceNum) || closePriceNum === 0) {
               return wmaFormatted;
             }
             
-            const adjustedWMA = (range.wma ?? 0) * wmaRatio;
+            const adjustedWMA = (range.wma ?? 0) * wmaRatio * mainTableScale;
             const percentage = (adjustedWMA / closePriceNum) * 100;
             const percentageFormatted = formatAbsolutePercentage(percentage);
             
@@ -265,13 +268,14 @@ export default function PriceTableRow({
               return '—';
             }
             
-            const rangeFormatted = formatRangeOnly(range, rangeRatio);
+            const effectiveRangeRatio = rangeRatio * mainTableScale;
+            const rangeFormatted = formatRangeOnly(range, effectiveRangeRatio);
             
             if (isNaN(closePriceNum) || closePriceNum === 0) {
               return rangeFormatted;
             }
             
-            const adjustedRange = range.range * rangeRatio;
+            const adjustedRange = range.range * rangeRatio * mainTableScale;
             const percentage = (adjustedRange / closePriceNum) * 100;
             const percentageFormatted = formatAbsolutePercentage(percentage);
             
@@ -292,8 +296,8 @@ export default function PriceTableRow({
           }
           return (
             <div className="flex flex-col">
-              <span>{formatVolatility(range.maxVolatility)}</span>
-              <span>{formatVolatility(range.wmaVolatility)}</span>
+              <span>{formatVolatility((range.maxVolatility ?? 0) * mainTableScale)}</span>
+              <span>{formatVolatility((range.wmaVolatility ?? 0) * mainTableScale)}</span>
             </div>
           );
         })()}
