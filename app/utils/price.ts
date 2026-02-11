@@ -307,8 +307,8 @@ export function formatRangeDisplay(range: MaxRange, basePrice?: string, showHigh
     return '—';
   }
 
-  const rangeVal = useVolatilityMultipliers ? range.range * (range.maxVolatility ?? 0) : range.range;
-  const wmaVal = useVolatilityMultipliers ? (range.wma ?? 0) * (range.wmaVolatility ?? 0) : (range.wma ?? 0);
+  const rangeVal = useVolatilityMultipliers ? range.range * Math.max(range.maxVolatility ?? 0, 1) : range.range;
+  const wmaVal = useVolatilityMultipliers ? (range.wma ?? 0) * Math.max(range.wmaVolatility ?? 0, 1) : (range.wma ?? 0);
   const rangeFormatted = formatPrice(rangeVal.toString());
   const wmaFormatted = formatWMA(wmaVal, 1);
 
@@ -635,8 +635,8 @@ export const MULTIPLIER_VOLATILITY = -1;
 export function getThresholdMultipliers(range: MaxRange, multiplier: number): { wmaRatio: number; rangeRatio: number } {
   if (multiplier === MULTIPLIER_VOLATILITY) {
     return {
-      wmaRatio: range.wmaVolatility ?? 0,
-      rangeRatio: range.maxVolatility ?? 0,
+      wmaRatio: Math.max(range.wmaVolatility ?? 0, 1),
+      rangeRatio: Math.max(range.maxVolatility ?? 0, 1),
     };
   }
   const ratio = multiplier / 100;

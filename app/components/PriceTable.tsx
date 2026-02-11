@@ -128,8 +128,9 @@ export default function PriceTable() {
       : getHighlightedColumn(minutesRemaining, effectiveMaxWindowSize);
 
   const secondsRemaining = minutesRemaining * 60;
+  const effectiveSecondsRemaining = Math.max(secondsRemaining, 60);
   const windowSeconds = resolution === '1h' ? highlightedColumn * 3600 : highlightedColumn * 60;
-  const mainTableScale = Math.min(1, windowSeconds > 0 ? secondsRemaining / windowSeconds : 1);
+  const mainTableScale = Math.min(1, windowSeconds > 0 ? effectiveSecondsRemaining / windowSeconds : 1);
 
   // Calculate highlighting flags (still used for row highlighting)
   const highlightingFlags = useMemo(() => {

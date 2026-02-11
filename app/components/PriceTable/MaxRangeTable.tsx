@@ -196,8 +196,8 @@ export default function MaxRangeTable({
                   if (!range || range.range === 0) {
                     return '—';
                   }
-                  const rangeRatio = multiplier === MULTIPLIER_VOLATILITY ? (range.maxVolatility ?? 0) : multiplier / 100;
-                  const wmaRatio = multiplier === MULTIPLIER_VOLATILITY ? (range.wmaVolatility ?? 0) : multiplier / 100;
+                  const rangeRatio = multiplier === MULTIPLIER_VOLATILITY ? Math.max(range.maxVolatility ?? 0, 1) : multiplier / 100;
+                  const wmaRatio = multiplier === MULTIPLIER_VOLATILITY ? Math.max(range.wmaVolatility ?? 0, 1) : multiplier / 100;
                   const chgMultiplier = multiplier === MULTIPLIER_VOLATILITY ? 1 : multiplier / 100;
                   const rangeFormatted = formatRangeOnly(range, rangeRatio);
                   const wmaFormatted = formatWMA(range.wma, wmaRatio);
