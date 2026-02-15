@@ -1,4 +1,4 @@
-export type TimeframeType = '15m' | '1h' | '4h' | '1d';
+export type TimeframeType = '5m' | '15m' | '1h' | '4h' | '1d';
 
 export interface TimeframeConfig {
   type: TimeframeType;
@@ -11,6 +11,15 @@ export interface TimeframeConfig {
 }
 
 export const TIMEFRAME_CONFIGS: Record<TimeframeType, TimeframeConfig> = {
+  '5m': {
+    type: '5m',
+    label: '5m',
+    intervalMinutes: 5,
+    maxWindowSize: 5,
+    candleLimit: 60,
+    candleInterval: '5m',
+    columnCount: 5,
+  },
   '15m': {
     type: '15m',
     label: '15m',

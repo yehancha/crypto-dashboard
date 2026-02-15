@@ -166,7 +166,9 @@ export function useCryptoPrices(
           };
           
           // Preserve close price based on timeframe
-          if (timeframe === '15m') {
+          if (timeframe === '5m') {
+            updatedPrice.close5m = prevPrice?.close5m || newPrice.close5m;
+          } else if (timeframe === '15m') {
             updatedPrice.close15m = prevPrice?.close15m || newPrice.close15m;
           } else if (timeframe === '1h' || timeframe === '4h') {
             updatedPrice.close1h = prevPrice?.close1h;
@@ -246,7 +248,9 @@ export function useCryptoPrices(
           };
           
           // Update close price based on timeframe
-          if (timeframe === '15m') {
+          if (timeframe === '5m') {
+            updatedPrice.close5m = candleCloses[price.symbol] || price.close5m;
+          } else if (timeframe === '15m') {
             updatedPrice.close15m = candleCloses[price.symbol] || price.close15m;
           } else if (timeframe === '1h' || timeframe === '4h') {
             updatedPrice.close1h = candleCloses[price.symbol] || price.close1h;

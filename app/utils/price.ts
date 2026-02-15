@@ -523,6 +523,9 @@ export function getEffectiveMaxWindowSize(
   resolution: EffectiveResolution
 ): number {
   switch (timeframe) {
+    case '5m':
+      // 5 windows of 1m candles.
+      return 5;
     case '15m':
       // 15 windows of 1m candles.
       return 15;
@@ -561,7 +564,7 @@ export function shouldUse4HHourlyMode(timeframe: string, minutesUntilExpiry: num
  * @returns Record mapping symbol to 'yellow' | 'green' | null indicating highlight color
  */
 export function calculateHighlightingFlags(
-  prices: Array<{ symbol: string; price: string; close15m?: string; close1h?: string; close1d?: string; maxRanges?: MaxRange[] }>,
+  prices: Array<{ symbol: string; price: string; close5m?: string; close15m?: string; close1h?: string; close1d?: string; maxRanges?: MaxRange[] }>,
   displayType: 'wma' | 'max-range',
   multiplier: number,
   timeframe: TimeframeType,
@@ -573,7 +576,9 @@ export function calculateHighlightingFlags(
   for (const item of prices) {
     // Get the close price based on timeframe
     const closePrice =
-      timeframe === '15m'
+      timeframe === '5m'
+        ? item.close5m
+        : timeframe === '15m'
         ? item.close15m
         : timeframe === '1d'
         ? item.close1d
@@ -669,7 +674,7 @@ export function getFilledDots(deviation: number, threshold: number): number {
  * @returns Record mapping symbol to object with yellowDots and greenDots (0-4)
  */
 export function calculateDotCounts(
-  prices: Array<{ symbol: string; price: string; close15m?: string; close1h?: string; close1d?: string; maxRanges?: MaxRange[] }>,
+  prices: Array<{ symbol: string; price: string; close5m?: string; close15m?: string; close1h?: string; close1d?: string; maxRanges?: MaxRange[] }>,
   multiplier: number,
   timeframe: TimeframeType,
   highlightedColumn: number,
@@ -680,7 +685,9 @@ export function calculateDotCounts(
   for (const item of prices) {
     // Get the close price based on timeframe
     const closePrice =
-      timeframe === '15m'
+      timeframe === '5m'
+        ? item.close5m
+        : timeframe === '15m'
         ? item.close15m
         : timeframe === '1d'
         ? item.close1d
@@ -738,7 +745,7 @@ export function calculateDotCounts(
  * @returns Record mapping symbol to { yellowMet, greenMet }
  */
 export function getNotificationMetPerSymbol(
-  prices: Array<{ symbol: string; price: string; close15m?: string; close1h?: string; close1d?: string; maxRanges?: MaxRange[] }>,
+  prices: Array<{ symbol: string; price: string; close5m?: string; close15m?: string; close1h?: string; close1d?: string; maxRanges?: MaxRange[] }>,
   multiplier: number,
   timeframe: TimeframeType,
   highlightedColumn: number,
@@ -753,7 +760,9 @@ export function getNotificationMetPerSymbol(
 
   for (const item of prices) {
     const closePrice =
-      timeframe === '15m'
+      timeframe === '5m'
+        ? item.close5m
+        : timeframe === '15m'
         ? item.close15m
         : timeframe === '1d'
         ? item.close1d

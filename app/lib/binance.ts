@@ -34,6 +34,7 @@ export type WindowRangeCache = Map<string, CachedWindowRange>;
 export interface BinancePrice {
   symbol: string;
   price: string;
+  close5m?: string; // 5-minute candle close price
   close15m?: string; // 15-minute candle close price
   close1h?: string; // 1-hour candle close price
   close1d?: string; // 1-day candle close price
