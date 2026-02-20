@@ -127,20 +127,30 @@ export default function PriceTable() {
       ? Math.min(effectiveMaxWindowSize, Math.max(1, Math.ceil(minutesRemaining / 60)))
       : getHighlightedColumn(minutesRemaining, effectiveMaxWindowSize);
 
-  const secondsRemaining = minutesRemaining * 60;
-  const effectiveSecondsRemaining = Math.max(secondsRemaining, 60);
-  const windowSeconds = resolution === '1h' ? highlightedColumn * 3600 : highlightedColumn * 60;
-  const mainTableScale = Math.min(1, windowSeconds > 0 ? effectiveSecondsRemaining / windowSeconds : 1);
-
-  // Calculate highlighting flags (still used for row highlighting)
+  // Calculate highlighting flags (uses interpolated range for partial periods)
   const highlightingFlags = useMemo(() => {
-    return calculateHighlightingFlags(prices, displayType, multiplier, timeframe, highlightedColumn, mainTableScale);
-  }, [prices, displayType, multiplier, timeframe, highlightedColumn, mainTableScale]);
+    return calculateHighlightingFlags(
+      prices,
+      displayType,
+      multiplier,
+      timeframe,
+      minutesRemaining,
+      effectiveMaxWindowSize,
+      resolution
+    );
+  }, [prices, displayType, multiplier, timeframe, minutesRemaining, effectiveMaxWindowSize, resolution]);
 
-  // Calculate dot counts (unchanged; used for display only)
+  // Calculate dot counts (uses interpolated range for partial periods)
   const dotCounts = useMemo(() => {
-    return calculateDotCounts(prices, multiplier, timeframe, highlightedColumn, mainTableScale);
-  }, [prices, multiplier, timeframe, highlightedColumn, mainTableScale]);
+    return calculateDotCounts(
+      prices,
+      multiplier,
+      timeframe,
+      minutesRemaining,
+      effectiveMaxWindowSize,
+      resolution
+    );
+  }, [prices, multiplier, timeframe, minutesRemaining, effectiveMaxWindowSize, resolution]);
 
   const timeLeftFraction = Math.min(1, Math.max(0, minutesRemaining / timeframeConfig.intervalMinutes));
   const notificationMet = useMemo(
@@ -149,15 +159,28 @@ export default function PriceTable() {
         prices,
         multiplier,
         timeframe,
-        highlightedColumn,
+        minutesRemaining,
+        effectiveMaxWindowSize,
+        resolution,
         timeLeftFraction,
         yellowThreshold,
         greenThreshold,
         maxVolatilityThreshold,
-        wmaVolatilityThreshold,
-        mainTableScale
+        wmaVolatilityThreshold
       ),
-    [prices, multiplier, timeframe, highlightedColumn, timeLeftFraction, yellowThreshold, greenThreshold, maxVolatilityThreshold, wmaVolatilityThreshold, mainTableScale]
+    [
+      prices,
+      multiplier,
+      timeframe,
+      minutesRemaining,
+      effectiveMaxWindowSize,
+      resolution,
+      timeLeftFraction,
+      yellowThreshold,
+      greenThreshold,
+      maxVolatilityThreshold,
+      wmaVolatilityThreshold,
+    ]
   );
 
   // Track previous "met" state per symbol to detect when thresholds are newly met
@@ -314,8 +337,10 @@ export default function PriceTable() {
                     onRemove={removeSymbol}
                     highlightColor={highlightingFlags[item.symbol] ?? null}
                     highlightedColumn={highlightedColumn}
+                    minutesRemaining={minutesRemaining}
+                    effectiveMaxWindowSize={effectiveMaxWindowSize}
+                    resolution={resolution}
                     multiplier={multiplier}
-                    mainTableScale={mainTableScale}
                     displayType={displayType}
                     notificationState={
                       !notifiedSymbols.has(item.symbol)

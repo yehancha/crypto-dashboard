@@ -357,7 +357,10 @@ export function formatRangeDisplay(range: MaxRange, basePrice?: string, showHigh
  * @param multiplier Optional multiplier to apply to the range (default 1.0)
  * @returns Formatted range value as string, or "—" if no range
  */
-export function formatRangeOnly(range: MaxRange | null | undefined, multiplier: number = 1.0): string {
+export function formatRangeOnly(
+  range: MaxRange | InterpolatedRange | null | undefined,
+  multiplier: number = 1.0
+): string {
   if (!range || range.range === 0) {
     return '—';
   }
@@ -544,6 +547,65 @@ export function getEffectiveMaxWindowSize(
 }
 
 /**
+ * Interpolated range values for partial periods (e.g. 4m 30s between 4m and 5m).
+ * Used for thresholds and display so values transition smoothly at period boundaries.
+ */
+export interface InterpolatedRange {
+  range: number;
+  wma: number;
+  maxVolatility: number;
+  wmaVolatility: number;
+}
+
+/**
+ * Returns range, wma, maxVolatility, and wmaVolatility for the current partial period
+ * by interpolating between the two adjacent window sizes (e.g. 4m and 5m for 4m 30s).
+ * When minutesRemaining is an integer or effectiveMaxWindowSize is 1, returns the single column's values.
+ * @param maxRanges Array of MaxRange from the symbol
+ * @param minutesRemaining Minutes until next interval
+ * @param effectiveMaxWindowSize Max window size for the timeframe/resolution
+ * @param resolution '1m' or '1h'
+ */
+export function getInterpolatedRange(
+  maxRanges: MaxRange[] | undefined,
+  minutesRemaining: number,
+  effectiveMaxWindowSize: number,
+  resolution: EffectiveResolution
+): InterpolatedRange | null {
+  if (!maxRanges?.length) return null;
+
+  const partial = resolution === '1h' ? minutesRemaining / 60 : minutesRemaining;
+  const lowerCol = Math.max(1, Math.min(effectiveMaxWindowSize, Math.floor(partial)));
+  const upperCol = Math.max(1, Math.min(effectiveMaxWindowSize, Math.ceil(partial)));
+
+  const rangeLower = maxRanges.find(r => r.windowSize === lowerCol);
+  if (!rangeLower) return null;
+
+  if (lowerCol === upperCol) {
+    return {
+      range: rangeLower.range,
+      wma: rangeLower.wma ?? 0,
+      maxVolatility: rangeLower.maxVolatility ?? 0,
+      wmaVolatility: rangeLower.wmaVolatility ?? 0,
+    };
+  }
+
+  const rangeUpper = maxRanges.find(r => r.windowSize === upperCol);
+  if (!rangeUpper) return null;
+
+  const blend = partial - lowerCol;
+
+  const lerp = (a: number, b: number) => a + (b - a) * blend;
+
+  return {
+    range: lerp(rangeLower.range, rangeUpper.range),
+    wma: lerp(rangeLower.wma ?? 0, rangeUpper.wma ?? 0),
+    maxVolatility: lerp(rangeLower.maxVolatility ?? 0, rangeUpper.maxVolatility ?? 0),
+    wmaVolatility: lerp(rangeLower.wmaVolatility ?? 0, rangeUpper.wmaVolatility ?? 0),
+  };
+}
+
+/**
  * Determines if 4H timeframe should use hourly mode (>1 hour until expiry) or minute mode (≤1 hour)
  * @param timeframe Timeframe type
  * @param minutesUntilExpiry Minutes until the next interval expiry
@@ -554,13 +616,15 @@ export function shouldUse4HHourlyMode(timeframe: string, minutesUntilExpiry: num
 }
 
 /**
- * Calculates highlighting flags for symbols based on whether absolute deviation exceeds WMA and max-range thresholds
+ * Calculates highlighting flags for symbols based on whether absolute deviation exceeds WMA and max-range thresholds.
+ * Uses interpolated range (between two adjacent window sizes) for partial periods so thresholds don't jump.
  * @param prices Array of BinancePrice objects
  * @param displayType Display type: 'wma' or 'max-range' (kept for backward compatibility, not used in calculation)
  * @param multiplier Multiplier percentage (e.g., 100 for 100%)
  * @param timeframe Timeframe type: '15m' or '1h'
- * @param highlightedColumn The highlighted column window size
- * @param mainTableScale Scale for sub-minute accuracy (seconds_remaining / window_seconds); default 1
+ * @param minutesRemaining Minutes until next interval
+ * @param effectiveMaxWindowSize Max window size for the timeframe/resolution
+ * @param resolution '1m' or '1h'
  * @returns Record mapping symbol to 'yellow' | 'green' | null indicating highlight color
  */
 export function calculateHighlightingFlags(
@@ -568,8 +632,9 @@ export function calculateHighlightingFlags(
   displayType: 'wma' | 'max-range',
   multiplier: number,
   timeframe: TimeframeType,
-  highlightedColumn: number,
-  mainTableScale: number = 1
+  minutesRemaining: number,
+  effectiveMaxWindowSize: number,
+  resolution: EffectiveResolution
 ): Record<string, 'yellow' | 'green' | null> {
   const flags: Record<string, 'yellow' | 'green' | null> = {};
 
@@ -588,16 +653,15 @@ export function calculateHighlightingFlags(
       continue;
     }
 
-    // Get the highlighted column's MaxRange
-    const range = item.maxRanges?.find(r => r.windowSize === highlightedColumn);
+    const range = getInterpolatedRange(item.maxRanges, minutesRemaining, effectiveMaxWindowSize, resolution);
     if (!range || range.range === 0) {
       flags[item.symbol] = null;
       continue;
     }
 
     const { wmaRatio, rangeRatio } = getThresholdMultipliers(range, multiplier);
-    const wmaThreshold = (range.wma ?? 0) * wmaRatio * mainTableScale;
-    const maxRangeThreshold = range.range * rangeRatio * mainTableScale;
+    const wmaThreshold = range.wma * wmaRatio;
+    const maxRangeThreshold = range.range * rangeRatio;
 
     if (wmaThreshold === 0 && maxRangeThreshold === 0) {
       flags[item.symbol] = null;
@@ -637,7 +701,10 @@ export const MULTIPLIER_VOLATILITY = -1;
  * Returns effective ratios for WMA and max-range thresholds.
  * When multiplier is MULTIPLIER_VOLATILITY, uses range's wmaVolatility and maxVolatility; otherwise multiplier/100.
  */
-export function getThresholdMultipliers(range: MaxRange, multiplier: number): { wmaRatio: number; rangeRatio: number } {
+export function getThresholdMultipliers(
+  range: MaxRange | InterpolatedRange,
+  multiplier: number
+): { wmaRatio: number; rangeRatio: number } {
   if (multiplier === MULTIPLIER_VOLATILITY) {
     return {
       wmaRatio: Math.max(range.wmaVolatility ?? 0, 1),
@@ -665,20 +732,23 @@ export function getFilledDots(deviation: number, threshold: number): number {
 }
 
 /**
- * Calculates yellow and green dot counts for each symbol based on deviation thresholds
+ * Calculates yellow and green dot counts for each symbol based on deviation thresholds.
+ * Uses interpolated range for partial periods so thresholds don't jump.
  * @param prices Array of BinancePrice objects
  * @param multiplier Multiplier percentage (e.g., 100 for 100%)
  * @param timeframe Timeframe type: '15m' or '1h'
- * @param highlightedColumn The highlighted column window size
- * @param mainTableScale Scale for sub-minute accuracy (seconds_remaining / window_seconds); default 1
+ * @param minutesRemaining Minutes until next interval
+ * @param effectiveMaxWindowSize Max window size for the timeframe/resolution
+ * @param resolution '1m' or '1h'
  * @returns Record mapping symbol to object with yellowDots and greenDots (0-4)
  */
 export function calculateDotCounts(
   prices: Array<{ symbol: string; price: string; close5m?: string; close15m?: string; close1h?: string; close1d?: string; maxRanges?: MaxRange[] }>,
   multiplier: number,
   timeframe: TimeframeType,
-  highlightedColumn: number,
-  mainTableScale: number = 1
+  minutesRemaining: number,
+  effectiveMaxWindowSize: number,
+  resolution: EffectiveResolution
 ): Record<string, { yellowDots: number; greenDots: number }> {
   const dotCounts: Record<string, { yellowDots: number; greenDots: number }> = {};
 
@@ -697,16 +767,15 @@ export function calculateDotCounts(
       continue;
     }
 
-    // Get the highlighted column's MaxRange
-    const range = item.maxRanges?.find(r => r.windowSize === highlightedColumn);
+    const range = getInterpolatedRange(item.maxRanges, minutesRemaining, effectiveMaxWindowSize, resolution);
     if (!range || range.range === 0) {
       dotCounts[item.symbol] = { yellowDots: 0, greenDots: 0 };
       continue;
     }
 
     const { wmaRatio, rangeRatio } = getThresholdMultipliers(range, multiplier);
-    const wmaThreshold = (range.wma ?? 0) * wmaRatio * mainTableScale;
-    const maxRangeThreshold = range.range * rangeRatio * mainTableScale;
+    const wmaThreshold = range.wma * wmaRatio;
+    const maxRangeThreshold = range.range * rangeRatio;
 
     // Calculate absolute deviation
     const currentPrice = parseFloat(item.price);
@@ -730,31 +799,32 @@ export function calculateDotCounts(
 
 /**
  * Determines per-symbol whether the notification bar is met for Yellow and Green.
- * Dot count logic is unchanged; this is used only for notification triggering.
- * When threshold is Auto, "met" means deviation >= baseThreshold * timeLeftFraction.
+ * Uses interpolated range for partial periods. When threshold is Auto, "met" means deviation >= baseThreshold * timeLeftFraction.
  * @param prices Array of price items with maxRanges
  * @param multiplier Multiplier percentage (e.g., 100 for 100%)
  * @param timeframe Timeframe type
- * @param highlightedColumn The highlighted column window size
+ * @param minutesRemaining Minutes until next interval
+ * @param effectiveMaxWindowSize Max window size for the timeframe/resolution
+ * @param resolution '1m' or '1h'
  * @param timeLeftFraction Fraction of time left in candle (0–1)
  * @param yellowThreshold 0–4 or NOTIFY_THRESHOLD_AUTO
  * @param greenThreshold 0–4 or NOTIFY_THRESHOLD_AUTO
  * @param maxVolatilityThreshold 0–10; 0 = do not filter; otherwise notification only when maxVolatility >= this value
  * @param wmaVolatilityThreshold 0–10; 0 = do not filter; otherwise notification only when wmaVolatility >= this value
- * @param mainTableScale Scale for sub-minute accuracy (seconds_remaining / window_seconds); default 1
  * @returns Record mapping symbol to { yellowMet, greenMet }
  */
 export function getNotificationMetPerSymbol(
   prices: Array<{ symbol: string; price: string; close5m?: string; close15m?: string; close1h?: string; close1d?: string; maxRanges?: MaxRange[] }>,
   multiplier: number,
   timeframe: TimeframeType,
-  highlightedColumn: number,
+  minutesRemaining: number,
+  effectiveMaxWindowSize: number,
+  resolution: EffectiveResolution,
   timeLeftFraction: number,
   yellowThreshold: number,
   greenThreshold: number,
   maxVolatilityThreshold: number,
-  wmaVolatilityThreshold: number,
-  mainTableScale: number = 1
+  wmaVolatilityThreshold: number
 ): Record<string, { yellowMet: boolean; greenMet: boolean }> {
   const result: Record<string, { yellowMet: boolean; greenMet: boolean }> = {};
 
@@ -772,15 +842,15 @@ export function getNotificationMetPerSymbol(
       continue;
     }
 
-    const range = item.maxRanges?.find(r => r.windowSize === highlightedColumn);
+    const range = getInterpolatedRange(item.maxRanges, minutesRemaining, effectiveMaxWindowSize, resolution);
     if (!range || range.range === 0) {
       result[item.symbol] = { yellowMet: false, greenMet: false };
       continue;
     }
 
     const { wmaRatio, rangeRatio } = getThresholdMultipliers(range, multiplier);
-    const wmaThreshold = (range.wma ?? 0) * wmaRatio * mainTableScale;
-    const maxRangeThreshold = range.range * rangeRatio * mainTableScale;
+    const wmaThreshold = range.wma * wmaRatio;
+    const maxRangeThreshold = range.range * rangeRatio;
 
     const currentPrice = parseFloat(item.price);
     const closePriceNum = parseFloat(closePrice);
@@ -806,11 +876,11 @@ export function getNotificationMetPerSymbol(
         : getFilledDots(absoluteDeviation, maxRangeThreshold) >= greenThreshold;
 
     // Volatility filters: notification only when volatility >= threshold (0 = do not consider)
-    if (maxVolatilityThreshold > 0 && (range.maxVolatility ?? 0) < maxVolatilityThreshold) {
+    if (maxVolatilityThreshold > 0 && range.maxVolatility < maxVolatilityThreshold) {
       yellowMet = false;
       greenMet = false;
     }
-    if (wmaVolatilityThreshold > 0 && (range.wmaVolatility ?? 0) < wmaVolatilityThreshold) {
+    if (wmaVolatilityThreshold > 0 && range.wmaVolatility < wmaVolatilityThreshold) {
       yellowMet = false;
       greenMet = false;
     }

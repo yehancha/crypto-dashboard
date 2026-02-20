@@ -2,7 +2,7 @@
 
 import { type BinancePrice } from '../../lib/binance';
 import { type TimeframeType } from '../../lib/timeframe';
-import { formatPrice, calculateAbsoluteDeviation, calculateDeviation, formatDeviationWithAbsolute, formatRangeOnly, formatWMA, formatAbsolutePercentage, getFilledDots, formatVolatility, getThresholdMultipliers } from '../../utils/price';
+import { formatPrice, calculateAbsoluteDeviation, calculateDeviation, formatDeviationWithAbsolute, formatRangeOnly, formatWMA, formatAbsolutePercentage, getFilledDots, formatVolatility, getThresholdMultipliers, getInterpolatedRange, type EffectiveResolution } from '../../utils/price';
 
 type DisplayType = 'wma' | 'max-range';
 
@@ -20,8 +20,10 @@ interface PriceTableRowProps {
   onRemove: (symbol: string) => void;
   highlightColor?: 'yellow' | 'green' | null;
   highlightedColumn: number;
+  minutesRemaining: number;
+  effectiveMaxWindowSize: number;
+  resolution: EffectiveResolution;
   multiplier: number;
-  mainTableScale?: number;
   displayType: DisplayType;
   notificationState?: 'none' | 'tick' | 'noted';
   onNotificationCellClick?: (symbol: string) => void;
@@ -41,12 +43,16 @@ export default function PriceTableRow({
   onRemove,
   highlightColor = null,
   highlightedColumn,
+  minutesRemaining,
+  effectiveMaxWindowSize,
+  resolution,
   multiplier,
-  mainTableScale = 1,
   displayType,
   notificationState = 'none',
   onNotificationCellClick,
 }: PriceTableRowProps) {
+  const interpolated = getInterpolatedRange(item.maxRanges, minutesRemaining, effectiveMaxWindowSize, resolution);
+  const range = interpolated ?? item.maxRanges?.find(r => r.windowSize === highlightedColumn);
   return (
     <tr
       draggable
@@ -196,13 +202,12 @@ export default function PriceTableRow({
               : timeframe === '1d'
               ? item.close1d
               : item.close1h;
-          const range = item.maxRanges?.find(r => r.windowSize === highlightedColumn);
           const absoluteDeviation = calculateAbsoluteDeviation(item.price, closePrice);
           const absDeviation = absoluteDeviation !== null ? Math.abs(absoluteDeviation) : 0;
           
           const { wmaRatio, rangeRatio } = range ? getThresholdMultipliers(range, multiplier) : { wmaRatio: 0, rangeRatio: 0 };
-          const wmaThreshold = (range?.wma ?? 0) * wmaRatio * mainTableScale;
-          const maxRangeThreshold = (range?.range ?? 0) * rangeRatio * mainTableScale;
+          const wmaThreshold = (range?.wma ?? 0) * wmaRatio;
+          const maxRangeThreshold = (range?.range ?? 0) * rangeRatio;
           
           // Calculate how many dots to color based on WMA (yellow) and max-range (green)
           const yellowDots = getFilledDots(absDeviation, wmaThreshold);
@@ -238,7 +243,6 @@ export default function PriceTableRow({
               : timeframe === '1d'
               ? item.close1d
               : item.close1h;
-          const range = item.maxRanges?.find(r => r.windowSize === highlightedColumn);
           
           if (!range || !closePrice) {
             return '—';
@@ -246,21 +250,22 @@ export default function PriceTableRow({
           
           const { wmaRatio, rangeRatio } = getThresholdMultipliers(range, multiplier);
           const closePriceNum = parseFloat(closePrice);
+          const rangeWma = range.wma ?? 0;
+          const rangeRange = range.range ?? 0;
           
           if (displayType === 'wma') {
             // Show WMA value when displayType is 'wma'
-            if (!range.wma || range.wma === 0) {
+            if (!rangeWma || rangeWma === 0) {
               return '—';
             }
             
-            const effectiveWmaRatio = wmaRatio * mainTableScale;
-            const wmaFormatted = formatWMA(range.wma, effectiveWmaRatio);
+            const wmaFormatted = formatWMA(rangeWma, wmaRatio);
             
             if (isNaN(closePriceNum) || closePriceNum === 0) {
               return wmaFormatted;
             }
             
-            const adjustedWMA = (range.wma ?? 0) * wmaRatio * mainTableScale;
+            const adjustedWMA = rangeWma * wmaRatio;
             const percentage = (adjustedWMA / closePriceNum) * 100;
             const percentageFormatted = formatAbsolutePercentage(percentage);
             
@@ -272,18 +277,17 @@ export default function PriceTableRow({
             );
           } else {
             // Show R value when displayType is 'max-range'
-            if (range.range === 0) {
+            if (rangeRange === 0) {
               return '—';
             }
             
-            const effectiveRangeRatio = rangeRatio * mainTableScale;
-            const rangeFormatted = formatRangeOnly(range, effectiveRangeRatio);
+            const rangeFormatted = formatRangeOnly(range, rangeRatio);
             
             if (isNaN(closePriceNum) || closePriceNum === 0) {
               return rangeFormatted;
             }
             
-            const adjustedRange = range.range * rangeRatio * mainTableScale;
+            const adjustedRange = rangeRange * rangeRatio;
             const percentage = (adjustedRange / closePriceNum) * 100;
             const percentageFormatted = formatAbsolutePercentage(percentage);
             
@@ -298,14 +302,15 @@ export default function PriceTableRow({
       </td>
       <td className="px-6 py-4 text-right text-sm text-zinc-600 dark:text-zinc-400">
         {(() => {
-          const range = item.maxRanges?.find(r => r.windowSize === highlightedColumn);
           if (!range) {
             return '—';
           }
+          const maxVol = range.maxVolatility ?? 0;
+          const wmaVol = range.wmaVolatility ?? 0;
           return (
             <div className="flex flex-col">
-              <span>{formatVolatility((range.maxVolatility ?? 0) * mainTableScale)}</span>
-              <span>{formatVolatility((range.wmaVolatility ?? 0) * mainTableScale)}</span>
+              <span>{formatVolatility(maxVol)}</span>
+              <span>{formatVolatility(wmaVol)}</span>
             </div>
           );
         })()}
