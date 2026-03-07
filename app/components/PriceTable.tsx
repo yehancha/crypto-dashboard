@@ -229,7 +229,7 @@ export default function PriceTable() {
     previousMetRef.current = Object.fromEntries(
       Object.keys(notificationMet).map((symbol) => [symbol, notificationMet[symbol].yellowMet && notificationMet[symbol].greenMet])
     );
-  }, [notificationMet, yellowThreshold, greenThreshold, notify, timeframeConfig.label, notedSymbols]);
+  }, [notificationMet, yellowThreshold, greenThreshold, maxVolatilityThreshold, wmaVolatilityThreshold, notify, timeframeConfig.label, notedSymbols]);
 
   const handleAddSymbol = () => {
     const trimmedSymbol = newSymbol.trim().toUpperCase();

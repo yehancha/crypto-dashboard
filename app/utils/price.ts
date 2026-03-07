@@ -809,8 +809,8 @@ export function calculateDotCounts(
  * @param timeLeftFraction Fraction of time left in candle (0–1)
  * @param yellowThreshold 0–4 or NOTIFY_THRESHOLD_AUTO
  * @param greenThreshold 0–4 or NOTIFY_THRESHOLD_AUTO
- * @param maxVolatilityThreshold 0–10; 0 = do not filter; otherwise notification only when maxVolatility >= this value
- * @param wmaVolatilityThreshold 0–10; 0 = do not filter; otherwise notification only when wmaVolatility >= this value
+ * @param maxVolatilityThreshold 0–10; 0 = do not filter; otherwise do not notify when maxVolatility >= this value
+ * @param wmaVolatilityThreshold 0–10; 0 = do not filter; otherwise do not notify when wmaVolatility >= this value
  * @returns Record mapping symbol to { yellowMet, greenMet }
  */
 export function getNotificationMetPerSymbol(
@@ -875,12 +875,12 @@ export function getNotificationMetPerSymbol(
         ? absoluteDeviation >= maxRangeThreshold * timeLeftFraction
         : getFilledDots(absoluteDeviation, maxRangeThreshold) >= greenThreshold;
 
-    // Volatility filters: notification only when volatility >= threshold (0 = do not consider)
-    if (maxVolatilityThreshold > 0 && range.maxVolatility < maxVolatilityThreshold) {
+    // Volatility filters: do not notify when volatility >= threshold (0 = do not apply filter)
+    if (maxVolatilityThreshold > 0 && range.maxVolatility >= maxVolatilityThreshold) {
       yellowMet = false;
       greenMet = false;
     }
-    if (wmaVolatilityThreshold > 0 && range.wmaVolatility < wmaVolatilityThreshold) {
+    if (wmaVolatilityThreshold > 0 && range.wmaVolatility >= wmaVolatilityThreshold) {
       yellowMet = false;
       greenMet = false;
     }
