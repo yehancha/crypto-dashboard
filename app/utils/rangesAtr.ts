@@ -67,6 +67,17 @@ export interface SymbolRangesComputed {
   rows: RangeRowValues[];
 }
 
+/**
+ * Blended hourly ATR using 1h and 1d bases (weights sum to 24).
+ * For nh with n = 2..22: k = n - 1 → ((24 - k)*base1h + k*base1d) / 24.
+ * For 23h: k = 23 → (1*base1h + 23*base1d) / 24.
+ */
+export function hourlyBlendedAtr(base1h: number, base1d: number, n: number): number {
+  if (n === 1) return base1h;
+  const k = n === 23 ? 23 : n - 1;
+  return ((24 - k) * base1h + k * base1d) / 24;
+}
+
 /** Table order: 1h..23h, then 1d..30d. */
 export function computeSymbolRanges(
   hourlyCandles: Candle[],
@@ -87,7 +98,7 @@ export function computeSymbolRanges(
   const rows: RangeRowValues[] = [];
 
   for (let n = 1; n <= 23; n++) {
-    const atr = base1h * Math.sqrt(n);
+    const atr = hourlyBlendedAtr(base1h, base1d, n);
     rows.push({
       label: `${n}h`,
       atr,
