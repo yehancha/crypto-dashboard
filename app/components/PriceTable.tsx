@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import Link from 'next/link';
 import { useCryptoPrices } from '../hooks/useCryptoPrices';
 import { useNotifications } from '../hooks/useNotifications';
 import { useLocalStorage } from '../hooks/useLocalStorage';
@@ -285,9 +286,17 @@ export default function PriceTable() {
       <div className="w-full max-w-full">
         <div className="mb-8 flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-semibold text-black dark:text-zinc-50">
-              Crypto Prices
-            </h1>
+            <div className="flex flex-wrap items-center gap-4">
+              <h1 className="text-3xl font-semibold text-black dark:text-zinc-50">
+                Crypto Prices
+              </h1>
+              <Link
+                href="/ranges"
+                className="text-sm font-medium text-zinc-600 underline-offset-4 hover:text-zinc-900 hover:underline dark:text-zinc-400 dark:hover:text-zinc-200"
+              >
+                Ranges
+              </Link>
+            </div>
             <div className="flex items-center gap-4">
               <CandleCountdown timeframe={timeframe} />
               <TimeframeSelector value={timeframe} onChange={setTimeframe} />

@@ -404,3 +404,90 @@ export async function get1hCandlesBatch(
   
   return results;
 }
+
+/**
+ * Fetches 1-day candle data for a symbol from Binance API
+ * @param symbol Trading pair symbol (e.g., 'BTCUSDT')
+ * @param limit Number of candles to fetch (default: 32 for ranges ATR seed + completed + incomplete)
+ * @returns Promise with array of candle objects
+ * @throws BinanceRateLimitError if rate limited (429) or IP banned (418)
+ *
+ * Weight: 1 per request
+ */
+export async function get1dCandles(symbol: string, limit: number = 32): Promise<Candle[]> {
+  try {
+    const url = `${BINANCE_API_BASE}/api/v3/klines?symbol=${symbol}&interval=1d&limit=${limit}`;
+
+    const response = await fetch(url, {
+      next: { revalidate: 0 },
+    });
+
+    if (response.status === 429 || response.status === 418) {
+      const retryAfterHeader = response.headers.get('Retry-After');
+      const retryAfter = retryAfterHeader ? parseInt(retryAfterHeader, 10) : undefined;
+
+      const errorMessage = response.status === 418
+        ? 'IP banned by Binance. Please wait before retrying.'
+        : 'Rate limit exceeded. Please slow down requests.';
+
+      throw new BinanceRateLimitError(errorMessage, response.status, retryAfter);
+    }
+
+    if (!response.ok) {
+      throw new Error(`Binance API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data: unknown[][] = await response.json();
+
+    return data.map((kline) => ({
+      openTime: kline[0] as number,
+      open: kline[1] as string,
+      high: kline[2] as string,
+      low: kline[3] as string,
+      close: kline[4] as string,
+      volume: kline[5] as string,
+    }));
+  } catch (error) {
+    if (error instanceof BinanceRateLimitError) {
+      throw error;
+    }
+
+    console.error(`Error fetching 1d candles for ${symbol}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches 1-day candle data for multiple symbols
+ * @param symbols Array of trading pair symbols
+ * @param limit Number of candles to fetch per symbol (default: 32)
+ * @returns Promise with map of symbol to candle array
+ *
+ * Weight: 1 per symbol per request
+ */
+export async function get1dCandlesBatch(
+  symbols: string[],
+  limit: number = 32
+): Promise<Record<string, Candle[]>> {
+  const results: Record<string, Candle[]> = {};
+
+  const promises = symbols.map(async (symbol) => {
+    try {
+      const candles = await get1dCandles(symbol, limit);
+      return { symbol, candles };
+    } catch (error) {
+      console.error(`Failed to fetch 1d candles for ${symbol}:`, error);
+      return { symbol, candles: undefined };
+    }
+  });
+
+  const settled = await Promise.allSettled(promises);
+
+  settled.forEach((result) => {
+    if (result.status === 'fulfilled' && result.value.candles) {
+      results[result.value.symbol] = result.value.candles;
+    }
+  });
+
+  return results;
+}
