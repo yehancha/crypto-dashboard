@@ -181,7 +181,7 @@ export default function RangesTable() {
                   {symbols.map((sym) => (
                     <th
                       key={sym}
-                      colSpan={3}
+                      colSpan={5}
                       className="border-l border-zinc-200 px-2 py-2 text-center font-semibold text-zinc-900 dark:border-zinc-700 dark:text-zinc-50"
                     >
                       <div className="flex items-center justify-center gap-2">
@@ -202,6 +202,9 @@ export default function RangesTable() {
                   {symbols.map((sym) => (
                     <Fragment key={`${sym}-sub`}>
                       <th className="border-l border-zinc-200 px-2 py-2 text-center text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">
+                        Min2
+                      </th>
+                      <th className="border-l border-zinc-200 px-2 py-2 text-center text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">
                         Min
                       </th>
                       <th className="border-l border-zinc-200 px-2 py-2 text-center text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">
@@ -209,6 +212,9 @@ export default function RangesTable() {
                       </th>
                       <th className="border-l border-zinc-200 px-2 py-2 text-center text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">
                         Max
+                      </th>
+                      <th className="border-l border-zinc-200 px-2 py-2 text-center text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">
+                        Max2
                       </th>
                     </Fragment>
                   ))}
@@ -229,6 +235,9 @@ export default function RangesTable() {
                         return (
                           <Fragment key={`${sym}-${label}`}>
                             <td className="border-l border-zinc-200 px-2 py-2 text-right tabular-nums text-zinc-800 dark:border-zinc-700 dark:text-zinc-200">
+                              {row ? formatNum(row.min2) : '—'}
+                            </td>
+                            <td className="border-l border-zinc-200 px-2 py-2 text-right tabular-nums text-zinc-800 dark:border-zinc-700 dark:text-zinc-200">
                               {row ? formatNum(row.min) : '—'}
                             </td>
                             <td className="border-l border-zinc-200 px-2 py-2 text-right tabular-nums text-zinc-800 dark:border-zinc-700 dark:text-zinc-200">
@@ -236,6 +245,9 @@ export default function RangesTable() {
                             </td>
                             <td className="border-l border-zinc-200 px-2 py-2 text-right tabular-nums text-zinc-800 dark:border-zinc-700 dark:text-zinc-200">
                               {row ? formatNum(row.max) : '—'}
+                            </td>
+                            <td className="border-l border-zinc-200 px-2 py-2 text-right tabular-nums text-zinc-800 dark:border-zinc-700 dark:text-zinc-200">
+                              {row ? formatNum(row.max2) : '—'}
                             </td>
                           </Fragment>
                         );

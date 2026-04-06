@@ -57,8 +57,10 @@ export function dailyTrsForAtr(candles: Candle[]): number[] | null {
 export interface RangeRowValues {
   label: string;
   atr: number;
+  min2: number;
   min: number;
   max: number;
+  max2: number;
 }
 
 export interface SymbolRangesComputed {
@@ -91,8 +93,10 @@ export function computeSymbolRanges(
     rows.push({
       label: `${n}h`,
       atr,
+      min2: currentPrice - 2 * atr,
       min: currentPrice - atr,
       max: currentPrice + atr,
+      max2: currentPrice + 2 * atr,
     });
   }
 
@@ -101,8 +105,10 @@ export function computeSymbolRanges(
     rows.push({
       label: `${n}d`,
       atr,
+      min2: currentPrice - 2 * atr,
       min: currentPrice - atr,
       max: currentPrice + atr,
+      max2: currentPrice + 2 * atr,
     });
   }
 
